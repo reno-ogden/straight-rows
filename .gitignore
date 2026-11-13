@@ -1,0 +1,9 @@
+# Dataset: download at kickoff (see README); never commit it
+data/
+*.zip
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
