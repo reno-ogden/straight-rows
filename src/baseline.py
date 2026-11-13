@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Starter baseline: intentionally ignores S4, RFI, advisories, and multipath.
+"""Starter baseline, modified: uses regional S4 (not Kp) to separate space weather
+from jamming. Still ignores RFI, advisories, and multipath.
 
-python submission/baseline.py --data data --output submission.json \
+python src/baseline.py --data data --output submission.json \
     --github-handle YOUR_GITHUB_USERNAME \
     --repo-url https://github.com/YOUR_GITHUB_USERNAME/YOUR_SOLUTION_REPO
 
@@ -22,6 +23,10 @@ ACTION = {
 }
 EVAL_START = pd.Timestamp("2026-05-06T00:00:00Z")
 EVAL_END = pd.Timestamp("2026-05-07T00:00:00Z")
+# Regional S4 at or above this marks scintillation conditions. In the labeled
+# development window, S4 stays >= 0.418 inside every SPACE_WEATHER episode while
+# 3-hourly Kp drops to 3.0 before those episodes end. Chosen, not tuned.
+S4_STORM = 0.2
 
 
 def detect(data):
@@ -37,15 +42,19 @@ def detect(data):
              link=("base_link_ok", "mean")).reset_index()
     )
     feat = pd.merge_asof(feat.sort_values("ts"), kp.sort_values("ts"), on="ts")
+    with open(data / "sda/scintillation_series.json") as f:
+        s4 = pd.DataFrame(json.load(f)["series"])
+    s4["ts"] = pd.to_datetime(s4["ts"], utc=True)
+    feat = pd.merge_asof(feat.sort_values("ts"), s4.sort_values("ts"), on="ts")
     ev = feat[(feat.ts >= EVAL_START) & (feat.ts < EVAL_END)].sort_values(["tractor_id", "ts"]).copy()
     ev["cn0_low"] = ev.cn0 < 38
     ev["xte_hi"] = (ev.xte > 1.0) & (ev.moving > 1)
     n_low = ev.groupby("ts")["cn0_low"].transform("sum")
 
     def classify(r, number_low):
-        if r.cn0_low and number_low == 3 and r.kp >= 5:
+        if r.cn0_low and number_low == 3 and r.s4 >= S4_STORM:
             return "SPACE_WEATHER"
-        if r.cn0_low and r.kp < 5:
+        if r.cn0_low and r.s4 < S4_STORM:
             return "JAMMING"
         if r.xte_hi and not r.cn0_low:
             return "SPOOFING"
@@ -84,7 +93,8 @@ def detect(data):
             "evidence": [
                 f"Starter threshold rule identified {d['class']} on {','.join(d['tractors'])} "
                 f"from {d['start'].isoformat()} to {d['end'].isoformat()}.",
-                "This baseline uses Kp but does not corroborate with S4, advisories, or RFI. "
+                "This baseline separates space weather from jamming with regional S4 but does not "
+                "corroborate with advisories or RFI. "
                 "Review its attribution and replace this evidence with measured values.",
             ],
         }
