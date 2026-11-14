@@ -135,10 +135,18 @@ SANS = "'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-seri
 # Styling targets only keyed containers (st-key-<key>) and our own HTML classes.
 st.markdown(f"""<style>
 [data-testid="stHeader"] {{ display: none; }}
-[data-testid="stMainBlockContainer"] {{ padding: 0 1.5rem 2.5rem 1.5rem; max-width: 1680px; }}
+[data-testid="stMainBlockContainer"] {{ padding: 0 1.5rem 2.5rem 1.5rem; max-width: none; }}
 html, body, [data-testid="stAppViewContainer"] {{ font-family: {SANS}; }}
-.st-key-shell {{ background: {NAVY}; margin: 0 -1.5rem 0.9rem -1.5rem; padding: 12px 1.5rem 12px 1.5rem; }}
-.st-key-shell .fs-dates {{ color: #C9D6EA; margin-top: 4px; }}
+/* Header band: Streamlit gives the block width/max-width 100%, so negative margins alone cannot widen it; width
+   is set to the container width plus its 1.5rem side padding (no vw units, so no scrollbar compensation).
+   -1rem cancels the flex gap after the hidden <style> element. */
+.st-key-shell {{ background: {NAVY}; width: calc(100% + 3rem) !important; max-width: none !important;
+  margin: -1rem -1.5rem 1rem -1.5rem;
+  padding: 12px 1.5rem 14px 1.5rem; }}
+.st-key-shell [data-testid="stVerticalBlock"] {{ gap: 0.35rem; }}
+.st-key-shell [data-testid="stMarkdownContainer"] {{ margin-bottom: 0; }}
+.st-key-shell [data-testid="stPopover"] button {{ background: #FFFFFF; color: {INK}; }}
+.st-key-shell .fs-dates {{ color: #C9D6EA; }}
 .st-key-shell [data-testid="stButtonGroup"] {{ background: #FFFFFF; border-radius: 6px; padding: 2px;
   width: fit-content; }}
 .fs-brand {{ color: #FFFFFF; font-weight: 700; font-size: 1.12rem; letter-spacing: 0.04em; line-height: 1.2; }}
@@ -179,7 +187,10 @@ div[class*="st-key-surface"] {{ background: {SURFACE}; border: 1px solid {RULE};
 .fs-tbl td.na {{ color: {CORAL}; font-family: {SANS}; }}
 .fs-tbl td.focus, .fs-tbl th.focus {{ background: #F1F5FB; }}
 div[class*="st-key-row-"] {{ border-bottom: 1px solid {GRID}; padding: 4px 8px; border-left: 3px solid transparent; }}
-div[class*="st-key-row-on"] {{ background: {BLUE_BG}; border-left-color: {BLUE}; }}
+div[class*="st-key-row-"]:hover {{ background: #F6F9FD; }}
+div[class*="st-key-row-"]:focus-within {{ background: #F6F9FD; border-left-color: #8FB1EA; }}
+div[class*="st-key-row-on"], div[class*="st-key-row-on"]:hover {{ background: {BLUE_BG}; border-left-color: {BLUE}; }}
+.fs-sel {{ font-size: 0.75rem; font-weight: 650; color: {BLUE}; margin-left: 8px; }}
 .fs-row-cause {{ font-weight: 600; color: {INK}; }}
 .fs-legend {{ font-size: 0.84rem; color: {INK2}; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }}
 .fs-legend i {{ display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle;
@@ -336,11 +347,39 @@ def age(dt):
     return f"{s // 3600} h {s % 3600 // 60:02d} min" if s >= 3600 else f"{s // 60} min {s % 60:02d} s"
 
 
+def show(chart, width="stretch"):
+    """Render an Altair chart via its Vega-Lite spec, serialised once without JSON-schema re-validation.
+
+    st.altair_chart validates every spec against the full Vega-Lite schema on each rerun (~0.5 s per report
+    view across six charts). The specs are fixed code paths, checked when developed; skipping the repeated
+    validation changes no data or encoding.
+    """
+    st.vega_lite_chart(spec=to_spec(chart), theme=None, width=width)
+
+
+@st.cache_data(max_entries=64, show_spinner=False)
+def timeline_spec(data_dir, sig, window_name, cfg_items, sel_idx, compact):
+    """Fleet timeline spec; depends only on the window's detections and the selection, so it is cached."""
+    dets_ = pipeline_results(data_dir, sig, window_name, cfg_items)
+    a_, b_ = WINDOWS[window_name]
+    return to_spec(fleet_timeline(dets_, sel_idx, a_, b_, compact=compact))
+
+
+def interval_text(x, short=False):
+    """'2026-05-06 01:00–02:00 UTC' (short: '05-06 · 01:00–02:00 UTC'); both dates when the interval crosses midnight."""
+    s, e = ts_(x["start"]), ts_(x["end"])
+    dfmt = "%m-%d" if short else "%Y-%m-%d"
+    if s.normalize() == (e - pd.Timedelta(seconds=1)).normalize():
+        return f"{s:{dfmt}}{' ·' if short else ''} {s:%H:%M}–{e:%H:%M} UTC"
+    return f"{s:{dfmt} %H:%M} – {e:{dfmt} %H:%M} UTC"
+
+
 def det_id(x):
     """Stable identifier: cause, start and tractors (unique per window; row numbers are only for display)."""
     return f"{x['class']}|{x['start']}|{','.join(x['tractors'])}"
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def git_commit():
     try:
         return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True,
@@ -393,13 +432,28 @@ def who_flagged(c):
 
 
 # ---------------------------------------------------------------- charts
+# Chart theme as a plain Vega-Lite config, merged into each serialised spec (Altair's .configure_*() chain
+# deep-copies the whole chart, data included, once per call).
+CHART_CONFIG = {
+    "background": SURFACE, "font": SANS, "view": {"stroke": None},
+    "axis": {"labelColor": INK2, "titleColor": INK2, "gridColor": GRID, "domainColor": RULE, "tickColor": RULE,
+             "labelFontSize": 12, "titleFontSize": 12, "titleFontWeight": "normal"},
+    "title": {"color": INK, "fontSize": 13, "fontWeight": 600, "anchor": "start", "offset": 6},
+    "legend": {"labelColor": INK, "titleColor": INK2, "labelFontSize": 12},
+}
+
+
 def styled(ch):
-    return (ch.configure(background=SURFACE, font=SANS)
-            .configure_view(stroke=None)
-            .configure_axis(labelColor=INK2, titleColor=INK2, gridColor=GRID, domainColor=RULE, tickColor=RULE,
-                            labelFontSize=12, titleFontSize=12, titleFontWeight="normal")
-            .configure_title(color=INK, fontSize=13, fontWeight=600, anchor="start", offset=6)
-            .configure_legend(labelColor=INK, titleColor=INK2, labelFontSize=12))
+    return ch   # theme is applied in to_spec()
+
+
+def to_spec(chart):
+    spec = chart.to_dict(validate=False)
+    spec["config"] = CHART_CONFIG
+    # Fit only the width to the container; the height stays the plot height (plus title and axes), as with
+    # st.altair_chart. A full "fit" squeezed titles and axes into the stated height and clipped titles.
+    spec["autosize"] = {"type": "fit-x", "contains": "padding"}
+    return spec
 
 
 def x_enc(a, b, labels=True, title=True):
@@ -545,13 +599,31 @@ def fleet_timeline(dets, sel_idx, a, b, compact=False):
         s = dets[sel_idx]
         layers.append(alt.Chart(pd.DataFrame({"start": [ts_(s["start"])], "end": [ts_(s["end"])]}))
                       .mark_rect(color=BLUE, opacity=0.14).encode(x=x, x2="end:T"))
-    base = alt.Chart(df).encode(x=x, x2="end:T", y=y,
-                                yOffset=alt.YOffset("cause:N", sort=present, scale=alt.Scale(domain=present)))
+    # Full timeline: concurrent causes in sub-rows. Compact navigator: one 10 px bar per tractor lane (sub-rows
+    # there were ~2 px tall and could not be clicked); the selected detection is drawn last so it stays on top.
+    if compact:
+        df = pd.concat([df[df.sel != "selected"], df[df.sel == "selected"]])
+        base = alt.Chart(df).encode(x=x, x2="end:T", y=y)
+    else:
+        # Sub-rows only where detections overlap on the same tractor (greedy interval packing), so concurrent
+        # causes stay visible without thinning every bar to one row per cause in the window.
+        df = df.sort_values(["tractor", "start"]).copy()
+        rows_ = []
+        for _, g in df.groupby("tractor", sort=False):
+            ends = []
+            for r in g.itertuples():
+                j = next((n for n, e in enumerate(ends) if e <= r.start), len(ends))
+                ends[j:j + 1] = [r.end]
+                rows_.append(j)
+        df["row"] = rows_
+        nrow = int(df.row.max()) + 1
+        base = alt.Chart(df).encode(x=x, x2="end:T", y=y,
+                                    yOffset=alt.YOffset("row:O", scale=alt.Scale(domain=list(range(nrow)))))
     legend = None if compact else alt.Legend(
         orient="top", direction="horizontal", labelFont=MONO, symbolType="square", title=None,
         labelExpr=" : ".join(f"datum.label == '{k}' ? '{v['code']} {v['short'].lower()}'" for k, v in CAUSES.items())
         + " : datum.label")
-    layers.append(base.mark_bar(cornerRadius=2, cursor="pointer").encode(
+    layers.append(base.mark_bar(cornerRadius=2, cursor="pointer", **({"height": 9} if compact else {})).encode(
         color=alt.Color("cause:N", scale=alt.Scale(domain=present, range=[CAUSES[c]["color"] for c in present]),
                         legend=legend),
         opacity=alt.condition(alt.datum.sel == "selected", alt.value(1.0), alt.value(0.6 if sel_idx is not None else 0.9)),
@@ -560,7 +632,7 @@ def fleet_timeline(dets, sel_idx, a, b, compact=False):
         tooltip=[alt.Tooltip("label:N", title="detection"), alt.Tooltip("tractor:N")]).add_params(pick))
     layers.append(base.mark_text(align="left", dx=3, fontSize=10, font=MONO, color="#FFFFFF", fontWeight="bold")
                   .encode(x="start:T", text="text:N"))
-    return styled(alt.layer(*layers).properties(height=64 if compact else 150, width="container"))
+    return styled(alt.layer(*layers).properties(height=44 if compact else 118, width="container"))
 
 
 def compare_chart(ps, metric, nd, affected, focus):
@@ -670,9 +742,9 @@ def samples_at(idx, cursor):
 
 INSPECT = {   # fields shown inline per lab view (raw 1 Hz sample values)
     "guidance": [("XTE", lambda r: f"{r.cross_track_error_m:+.3f} m")],
-    "receiver": [("C/N0", lambda r: f"{r.mean_cn0_dbhz:.1f}"), ("min", lambda r: f"{r.min_cn0_dbhz:.1f} dB-Hz"),
-                 ("sats", lambda r: f"{r.num_sats:d}")],
-    "link": [("link", lambda r: "up" if r.base_link_ok else "down"), ("fix", lambda r: str(r.fix_state))],
+    "receiver": [("C/N0 mean", lambda r: f"{r.mean_cn0_dbhz:.1f}"), ("· min", lambda r: f"{r.min_cn0_dbhz:.1f} dB-Hz"),
+                 ("· satellites", lambda r: f"{r.num_sats:d}")],
+    "link": [("RTK link", lambda r: "up" if r.base_link_ok else "down"), ("· fix", lambda r: str(r.fix_state))],
 }
 
 
@@ -743,17 +815,20 @@ def k(w, name):
 def open_report(w, did):
     st.session_state[k(w, "sel")] = did
     st.session_state[k(w, "view")] = "report"
+    st.session_state["_scroll_top"] = True
 
 
 def go_view(w, view):
     st.session_state[k(w, "view")] = view
+    st.session_state["_scroll_top"] = True
 
 
 def step_incident(w, ids, delta):
     cur = st.session_state.get(k(w, "sel"))
     i = ids.index(cur) if cur in ids else 0
-    st.session_state[k(w, "sel")] = ids[(i + delta) % len(ids)]
+    st.session_state[k(w, "sel")] = ids[min(len(ids) - 1, max(0, i + delta))]   # stops at the ends
     st.session_state[k(w, "view")] = "report"
+    st.session_state["_scroll_top"] = True
 
 
 def on_timeline(w, chart_key, ids):
@@ -851,8 +926,8 @@ def methodology_md():
 def display_md():
     return """
 - **Evidence-lab views and default view per cause** (display only): spoofing → Guidance; jamming → Receiver
-  health; space weather → Space / RF context; equipment fault → Receiver health (antenna dropouts) or Correction
-  link & fix (link loss), chosen with the same test the evidence text uses. Every channel stays under *All signals*.
+  health; space weather → Space / RF; equipment fault → Receiver health (antenna dropouts, min C/N0 first) or
+  Link & fix (link loss), chosen with the same test the evidence text uses. Every channel stays under *All signals*.
 - **Display bins:** cross-track error bin mean (signed), mean C/N0 bin mean, min C/N0 bin minimum, satellites bin
   median, RTK link and RTK_FIXED % of samples; S4 and Kp drawn as the latest published value (step). At 1 min
   these equal the pipeline's features. No smoothing; lines break at missing bins and never join tractors.
@@ -898,18 +973,20 @@ def render_fleet():
     else:
         with st.container(key="surface-timeline"):
             ck = f"tl-{w}-{sel_id}"
-            st.altair_chart(fleet_timeline(dets, sel_idx, a_w, b_w), key=ck, selection_mode="pick", theme=None,
-                            on_select=lambda: on_timeline(w, ck, ids), width="stretch")
+            st.vega_lite_chart(spec=timeline_spec(data_dir, sig, window_name, cfg_items, sel_idx, False), key=ck,
+                               selection_mode="pick", theme=None, on_select=lambda: on_timeline(w, ck, ids),
+                               width="stretch")
         with st.container(key="surface-list", gap=None):
             for i, x in enumerate(dets):
                 on = ids[i] == sel_id
                 with st.container(key=f"row-{'on' if on else 'off'}-{w}-{i}"):
                     r1, r2, r3, r4, r5 = st.columns([2.8, 1.2, 2.0, 2.4, 1.2], vertical_alignment="center")
                     r1.markdown(f'{code_chip(x["class"])}<span class="fs-row-cause">Suspected '
-                                f'{CAUSES[x["class"]]["short"].lower()}</span>', unsafe_allow_html=True)
+                                f'{CAUSES[x["class"]]["short"].lower()}</span>'
+                                + ('<span class="fs-sel">● last opened</span>' if on else ""), unsafe_allow_html=True)
                     r2.markdown(tractor_chips(x["tractors"]), unsafe_allow_html=True)
-                    r3.markdown(f'<span class="fs-mono">{ts_(x["start"]):%m-%d %H:%M} → {hm(x["end"])}</span> '
-                                f'<span class="fs-note">{mins(x)} min</span>', unsafe_allow_html=True)
+                    r3.markdown(f'<span class="fs-mono" style="white-space:nowrap">{interval_text(x, short=True)}</span>'
+                                f'<span class="fs-note"> · {mins(x)} min</span>', unsafe_allow_html=True)
                     r4.markdown(f'<span class="fs-note">{ACTION_SHORT[x["action"]]}</span>', unsafe_allow_html=True)
                     r5.button("Open report", key=f"open-{w}-{i}", type="primary" if on else "secondary",
                               on_click=open_report, args=(w, ids[i]), width="stretch")
@@ -965,13 +1042,15 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
     cur_view = st.segmented_control("Evidence view", views, key=lab_key, required=True,
                                     format_func=lambda v: labels[v], label_visibility="collapsed")
     q = VIEWS[cur_view]["q"] if cur_view in VIEWS else "How did the three tractors compare over this interval?"
-    t1, t2, t3 = st.columns([5, 2.6, 1.4], vertical_alignment="center")
-    t1.markdown(f'<div class="fs-q">{q}</div>', unsafe_allow_html=True)
-    focus_v = t2.segmented_control("Tractor focus", ["All", *TRACTORS], default="All", required=True,
-                                   key=k(w, "focus"), format_func=lambda v: "All tractors" if v == "All" else v,
-                                   label_visibility="collapsed")
+    tq, tc = st.columns([1.1, 1], vertical_alignment="center")
+    tq.markdown(f'<div class="fs-q">{q}</div>', unsafe_allow_html=True)
+    with tc.container(horizontal=True, vertical_alignment="center", gap="small", horizontal_alignment="right"):
+        focus_v = st.segmented_control("Tractor focus", ["All", *TRACTORS], default="All", required=True,
+                                       key=k(w, "focus"), format_func=lambda v: "All tractors" if v == "All" else v,
+                                       label_visibility="collapsed")
+        chart_opts = st.popover("Chart options")
     focus = None if focus_v in (None, "All") else focus_v
-    with t3.popover("Chart options", width="stretch"):
+    with chart_opts:
         st.slider("Context before/after the detection (min)", 0, 180, step=5, key=k(w, "pad"),
                   disabled=x is None)
         st.radio("Display aggregation", list(AGGREGATIONS), key=k(w, "agg"),
@@ -1000,7 +1079,7 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
         H(f'<div class="fs-legend">{legend}</div>')
         strip = context_strip(dets, sel_idx if x is not None else None, flags[(flags.ts >= a) & (flags.ts < b)], a, b, cursor)
         if strip is not None:
-            st.altair_chart(strip, theme=None, width="stretch")
+            show(strip, width="stretch")
 
     if cur_view in ("guidance", "receiver", "link"):
         if bins is None or bins.empty:
@@ -1010,16 +1089,16 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
             if x is not None and x["class"] == "EQUIPMENT_FAULT" and cur_view == "receiver":
                 chs = ["min_cn0", "cn0", "sats"]   # dropout rule uses min C/N0: make it the primary chart
             for j, ch in enumerate(chs):
-                st.altair_chart(line_chart(bins, ch, a, b, ov, affected, focus, 300 if j == 0 else 120,
-                                           labels=(j == len(chs) - 1)), theme=None, width="stretch")
+                show(line_chart(bins, ch, a, b, ov, affected, focus, 300 if j == 0 else 120,
+                                labels=(j == len(chs) - 1)))
     elif cur_view == "space":
         rfi = d["rfi"][(d["rfi"].ts >= a) & (d["rfi"].ts < b)]
         c = step_chart(d, "s4", a, b, ov, 260, labels=False, rfi=rfi)
         if c is not None:
-            st.altair_chart(c, theme=None, width="stretch")
+            show(c, width="stretch")
         c = step_chart(d, "kp", a, b, ov, 110, labels=True)
         if c is not None:
-            st.altair_chart(c, theme=None, width="stretch")
+            show(c, width="stretch")
         st.caption(f"Amber dotted line: S4 = {cfg.s4_storm} (the pipeline's scintillation level). Coral ticks: RFI "
                    "report timestamps (observation vs. report time is not documented).")
     elif cur_view == "all":
@@ -1027,11 +1106,11 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
             st.info("No telemetry in this interval.")
         else:
             for ch in ["xte", "cn0", "min_cn0", "sats", "link", "fixed"]:
-                st.altair_chart(line_chart(bins, ch, a, b, ov, affected, focus, 105), theme=None, width="stretch")
+                show(line_chart(bins, ch, a, b, ov, affected, focus, 105), width="stretch")
             for ch in ["s4", "kp"]:
                 c = step_chart(d, ch, a, b, ov, 90)
                 if c is not None:
-                    st.altair_chart(c, theme=None, width="stretch")
+                    show(c, width="stretch")
     elif cur_view == "compare":
         metric = st.segmented_control("Measure", ["cn0", "mincn0", "sats", "xte_med", "xte_max", "fixed", "link"],
                                       default=PRIMARY_METRIC.get(x["class"], "cn0"), required=True,
@@ -1041,7 +1120,7 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
         if ch is None:
             st.info("No samples in any of the three windows.")
         else:
-            st.altair_chart(ch, theme=None, width="stretch")
+            show(ch, width="stretch")
         cols = {f"Before {hm(s0 - PRE)}–{hm(s0)} · working": ps[("before", "affected")],
                 f"During {hm(s0)}–{hm(e0)} · all samples": ps[("during", "affected")],
                 f"After {hm(e0)}–{hm(e0 + AFTER)} · working": ps[("after", "affected")]}
@@ -1072,7 +1151,7 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
             pc1, pc2 = st.columns([1.35, 1])
             with pc1:
                 chart, n_marks = position_chart(p, origin, idx, cursor, focus)
-                st.altair_chart(chart, theme=None, width="content")
+                show(chart, width="content")
             pc2.markdown(
                 f"- Equal scale: 1 m east = 1 m north. Metres from the interval's mean reported position "
                 f"(flat-earth, cos {origin[0]:.4f}°).\n- Faint trail = whole interval; bright = up to the cursor "
@@ -1083,14 +1162,15 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
 
     # ---- replay: one compact scrubber, exact timestamp, inspector on the current view
     if timed:
-        r1, r2, r3, r4, r5 = st.columns([5, 1, 1, 1.1, 1.5], vertical_alignment="center")
-        r1.slider("Replay time (UTC)", min_value=lo, max_value=hi, step=timedelta(seconds=1), format="HH:mm:ss",
+        st.slider("Replay time (UTC)", min_value=lo, max_value=hi, step=timedelta(seconds=1), format="HH:mm:ss",
                   key=scrub_key, label_visibility="collapsed")
-        r2.button("−10 s", key=f"{scrub_key}-b", on_click=nudge, args=(scrub_key, timedelta(seconds=-10), lo, hi),
-                  width="stretch")
-        r3.button("+10 s", key=f"{scrub_key}-f", on_click=nudge, args=(scrub_key, timedelta(seconds=10), lo, hi),
-                  width="stretch")
-        with r4.popover("More", width="stretch"):
+        rc = st.container(horizontal=True, vertical_alignment="center", gap="small")
+        rc.markdown(f'<div class="fs-note">Cursor <b class="fs-mono" style="color:{INK}">{cursor:%Y-%m-%d %H:%M:%S} '
+                    'UTC</b> · raw 1 Hz samples (charts show display bins)</div>', unsafe_allow_html=True,
+                    width="content")
+        rc.button("−10 s", key=f"{scrub_key}-b", on_click=nudge, args=(scrub_key, timedelta(seconds=-10), lo, hi))
+        rc.button("+10 s", key=f"{scrub_key}-f", on_click=nudge, args=(scrub_key, timedelta(seconds=10), lo, hi))
+        with rc.popover("More"):
             st.button("−1 min", key=f"{scrub_key}-bm", on_click=nudge, args=(scrub_key, timedelta(minutes=-1), lo, hi))
             st.button("+1 min", key=f"{scrub_key}-fm", on_click=nudge, args=(scrub_key, timedelta(minutes=1), lo, hi))
             if s0 is not None:
@@ -1098,12 +1178,10 @@ def render_lab(x, a, b, s0, e0, affected, ps, lab_key, scrub_key, default_t, rul
                           args=(scrub_key, s0.to_pydatetime().replace(tzinfo=None)))
                 st.button("Go to end", key=f"{scrub_key}-en", on_click=jump,
                           args=(scrub_key, min(hi, (e0 - pd.Timedelta(seconds=1)).to_pydatetime().replace(tzinfo=None))))
-        with r5.popover("Full readout", width="stretch"):
+        with rc.popover("Full readout"):
             H(f'<div class="fs-h2">Raw 1 Hz samples at <span class="fs-mono">{cursor:%Y-%m-%d %H:%M:%S}</span> UTC</div>')
             H(readout_table(samples, flags, dets, cursor, focus, d))
             st.caption("Exact-second match only (tolerance 0 s); nothing is interpolated or taken from a nearby second.")
-        H(f'<div class="fs-note" style="margin:-4px 0 4px 0">Cursor <b class="fs-mono">{cursor:%Y-%m-%d %H:%M:%S} UTC'
-          '</b> · raw 1 Hz sample values (charts show display bins)</div>')
         H(inspector_html(samples, cur_view, cursor, focus, d))
     return cur_view
 
@@ -1157,16 +1235,18 @@ def render_report():
     sa, su = ps[("during", "affected")][0], ps[("during", "others")][0]
 
     # ---- navigation bar: back, previous/next, slim clickable timeline (same selection state)
-    n1, n2, n3, n4, n5 = st.columns([1.3, 0.9, 0.8, 0.9, 7], vertical_alignment="center")
-    n1.button("← Back to fleet", on_click=go_view, args=(w, "fleet"), width="stretch")
-    n2.button("‹ Previous", on_click=step_incident, args=(w, ids, -1), width="stretch", disabled=len(ids) < 2)
-    n3.markdown(f'<div style="text-align:center" class="fs-note"><b class="fs-mono">{sel_idx + 1}</b> of '
-                f'{len(ids)}</div>', unsafe_allow_html=True)
-    n4.button("Next ›", on_click=step_incident, args=(w, ids, 1), width="stretch", disabled=len(ids) < 2)
+    nl, n5 = st.columns([4, 6], vertical_alignment="center")
+    with nl.container(horizontal=True, vertical_alignment="center", gap="small"):
+        st.button("← Back to fleet", on_click=go_view, args=(w, "fleet"))
+        st.button("‹ Previous", on_click=step_incident, args=(w, ids, -1), disabled=sel_idx == 0)
+        st.markdown(f'<div class="fs-note" style="padding:0 4px"><b class="fs-mono">{sel_idx + 1}</b> of '
+                    f'{len(ids)}</div>', unsafe_allow_html=True, width="content")
+        st.button("Next ›", on_click=step_incident, args=(w, ids, 1), disabled=sel_idx == len(ids) - 1)
     with n5:
         mk = f"mini-{w}-{sel_id}"
-        st.altair_chart(fleet_timeline(dets, sel_idx, a_w, b_w, compact=True), key=mk, selection_mode="pick",
-                        theme=None, on_select=lambda: on_timeline(w, mk, ids), width="stretch")
+        st.vega_lite_chart(spec=timeline_spec(data_dir, sig, window_name, cfg_items, sel_idx, True), key=mk,
+                           selection_mode="pick", theme=None, on_select=lambda: on_timeline(w, mk, ids),
+                           width="stretch")
 
     # ---- report heading
     counts = rule_counts(flags, x["class"], s0, e0, affected)
@@ -1174,7 +1254,7 @@ def render_report():
                                               link=cfg.link_low_frac, drop=cfg.dropout_dbhz)
     H(f'<div class="fs-eyebrow">Incident report · pipeline attribution, not confirmed</div>'
       f'<div class="fs-h1">{code_chip(x["class"])}{html.escape(title_of(x))}</div>'
-      f'<div class="fs-meta"><span class="fs-mono">{s0:%Y-%m-%d %H:%M} → {e0:%H:%M} UTC</span> · {mins(x)} min · '
+      f'<div class="fs-meta"><span class="fs-mono">{interval_text(x)}</span> · {mins(x)} min · '
       f'{tractor_chips(affected)}</div>')
 
     rep, fin = st.columns([2.35, 1], gap="medium")
@@ -1276,3 +1356,10 @@ elif view == "custom":
     render_custom()
 else:
     render_fleet()
+
+# After a navigation click (open / back / previous / next / custom), start the new view at its top once.
+# Emitted at the end of the page so it never shifts the layout above it; ordinary reruns (scrubbing,
+# focus, view switches) keep the reader's scroll position.
+if st.session_state.pop("_scroll_top", False):
+    st.html("<script>(function(){var m=document.querySelector('[data-testid=\"stMain\"]');"
+            "if(m){m.scrollTo({top:0});}window.scrollTo(0,0);})();</script>", unsafe_allow_javascript=True)

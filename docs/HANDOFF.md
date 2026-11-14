@@ -27,6 +27,64 @@
    (copy of `outputs/submission.json`); open one PR to `main` before 22:00 UTC; confirm the Submission check is green.
 3. Any push to the PR after 22:00 UTC makes it late.
 
+## Polish and reliability pass (2026-11-14 ~14:55 UTC)
+
+Committed on local branch `feat/blue-investigation-workspace` on top of `6155945` (not pushed, not merged); only `src/dashboard.py` and this
+file changed. Layout direction, features, pipeline, data and schema unchanged.
+
+Launch (Windows CMD, repo root): `.venv\Scripts\python.exe -m streamlit run src\dashboard.py` → http://localhost:8501
+
+**Header (measured in the browser, then fixed).** Causes: (1) the main block container had `max-width: 1680px`,
+centred, so the band could not reach the viewport edges; (2) Streamlit gives the keyed block `width/max-width:
+100%`, so its negative right margin had no effect (band ended 48 px short); (3) a 16 px flex gap after the hidden
+`<style>` element pushed the band down; (4) Streamlit's `margin-bottom: -16px` on markdown containers let the
+date line overflow the band's bottom. Fixes (scoped to `.st-key-shell` plus `max-width: none` on the container):
+explicit `width: calc(100% + 3rem)`, `max-width: none`, `margin-top: -1rem`, `margin-bottom: 0` on markdown inside
+the band, 0.35rem inner gap, white Settings button. No `vw` units, no overflow hiding. Verified by DOM
+measurement at 1920/1366/1024: band spans 0 → scroll-container width (scrollbar excluded), no horizontal
+overflow, date line inside the band, wraps at 1024.
+
+**Navigation (reproduced, profiled, fixed).** Mechanism: Streamlit reruns (no full page reloads); `on_click` /
+`on_select` callbacks change session state before the rerun, so the first run already renders the new view (no
+flash of a different incident, no loop). Root causes of choppiness: report reruns took ~1.3–1.6 s of Python
+(headless timing) while Streamlit showed the old view faded. Profile: Altair `to_dict` JSON-schema validation of
+six specs (~0.5 s), `.configure_*()` deep copies (~0.4 s), rebuilding the unchanged window timeline, and a `git`
+subprocess for provenance on every rerun. Fixes: charts serialised once with `to_dict(validate=False)` and shown
+with `st.vega_lite_chart` (same `on_select`), theme merged as a plain config dict, timeline specs cached
+(`timeline_spec`, keyed by data signature, window, config, selection), `git_commit` cached (120 s). Headless
+timings, before → after: fleet rerun 0.6 → ~0.2 s; report revisit 1.6 → ~0.6 s; replay step 1.6 → ~0.66 s.
+Also: navigation clicks scroll to the top once (one-shot flag, script emitted at page end; ordinary reruns keep
+scroll); Previous/Next stop at the ends (disabled) instead of wrapping.
+Framework limits: Streamlit still re-renders the page on each interaction and briefly shows stale elements; the
+browser Back button does not navigate between app views; cached specs are keyed by their own function source,
+so after editing chart code restart the server (runtime data/config changes do invalidate correctly).
+
+**Other bugs fixed.** Compact report timeline bars were ~2 px tall (cause sub-rows) and effectively unclickable →
+10 px bars per lane; full timeline used one sub-row per cause in the window (thin bars) → sub-rows only where
+detections overlap on a tractor (greedy packing; overlaps still visible). With `vega_lite_chart`, Streamlit's
+`autosize: fit` squeezed titles/axes into the plot height and clipped supporting-chart titles → `fit-x`.
+Nav buttons, tractor focus and Chart options truncated below ~1200 px → wrapping horizontal containers. Row
+interval text "01:00 → 02:00 60 min" ran together → "05-06 · 01:00–02:00 UTC · 60 min" (no-wrap); report
+meta "2026-05-06 01:00–02:00 UTC · 60 min". Selected row has a text label "last opened" plus hover/focus
+states. Inspector labels "C/N0 mean … · min … dB-Hz · satellites". In-app display definitions used old view
+names. Settings button lost contrast while open.
+
+**Checks performed.**
+
+| Check | Result |
+|---|---|
+| `pytest -q tests` | 15 passed |
+| Regenerate → new `outputs/polish-verify-20261114T145420Z/` | parsed JSON equal to `outputs/submission.before-readiness-20261114T082526Z.json` (and byte-identical) |
+| Repo + official validator (`4b9c010`) | `OK: 7 detection(s)` both |
+| `data/` SHA-256 | unchanged |
+| Headless `AppTest` (scratch) | both windows, all 16 detections from the list with correct "n of N", every lab view, focus, +10 s, Previous/Next disabled exactly at ends and round-trip, Back, custom interval all views, window switch keeps per-window state, missing data → message — no failures |
+| Browser (in-app pane) | list open (incl. last row from a scrolled position → report at top), fleet-timeline click, compact-timeline click, Next, Back (selection retained, "last opened"), dev↔eval from overview and report, focus, two +10 s steps (slider = cursor = inspector), Details, Settings, custom interval; DOM checks at 1920/1366/1024: no overflow, no clipped buttons, no clipped chart titles; console errors: none in the buffer read |
+
+Screenshots: `outputs/polish-screenshots-20261114/` (01 is before the fix; 03–04 predate the final timeline
+height trim; late captures were cropped by the pane after a DPI change — geometry verified by DOM measurement).
+Not checked: screen reader, keyboard-only timeline, touch, zoom, colour-vision simulation, widths < 1024 px, the
+empty-detections state with real data (code path exists; no window produces zero detections).
+
 ## Dashboard overhaul — interactive incident report (2026-11-14 ~14:30 UTC)
 
 - Committed on local branch `feat/blue-investigation-workspace` on top of `4d3eaab` (the dark workspace below);
