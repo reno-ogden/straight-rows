@@ -61,6 +61,8 @@ def main():
     p.add_argument("--data", default="data")
     p.add_argument("--sweep", action="store_true", help="also sweep bridge_gap_s")
     a = p.parse_args()
+    if not (Path(a.data) / "farm" / "tractor_telemetry.csv.gz").is_file():
+        sys.exit(f"Dataset not found in '{a.data}'. Get it first (README: 'Get and verify the data').")
     d = load(a.data)
     labels = d["labels"]
 

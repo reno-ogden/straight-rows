@@ -27,6 +27,28 @@
    (copy of `outputs/submission.json`); open one PR to `main` before 22:00 UTC; confirm the Submission check is green.
 3. Any push to the PR after 22:00 UTC makes it late.
 
+## Reproduction review (2026-11-14 ~16:25 UTC; committed locally, not pushed)
+
+Clean copy: `git clone` of `90473a7` into a temporary scratch folder, `py -3.11 -m venv .venv`, `pip install -r
+requirements.txt` from PyPI (TLS verification on) → success, `pip check` clean. In that copy:
+- Without `data\`: `pytest` → `30 passed, 3 skipped` (exit 0) — looks like success but is not an analysis run;
+  `run_pipeline.py` / `evaluate_dev.py` raised `FileNotFoundError` (exit 1, nothing written).
+- `scripts\get_data.py` (direct download, no `--zip`) → `Extracted 6 data files`, checksum verified; the six files
+  are byte-identical to the working `data\` (this also verifies the working dataset against the release).
+- With data: `pytest -q -rs tests` 33 passed; `run_pipeline.py` → byte-identical to working `outputs\submission.json`
+  (`27ed40c5…`) and to a second run; repo + official validator OK; `evaluate_dev.py` reproduced the README table;
+  `dev_episode_stats.py` and `plot_dev_episodes.py` ran (12 plots); dashboard loaded headlessly (AppTest).
+- Not tested: `--zip` fallback (zip not on disk; used earlier), another machine/OS/Python, offline install,
+  dashboard in a browser from the clean copy.
+
+Fixes: `run_pipeline.py` and `evaluate_dev.py` now stop with `Dataset not found …` (exit 1, nothing written)
+instead of a traceback; output with data unchanged (byte-identical). README: install now marked tested (clean
+copy), data provenance/synthetic nature and label use, direct download documented with both observed outcomes,
+`--zip` fallback status, network/offline table, `pytest -rs` and the skipped-tests warning, official validator
+identity, clean-copy results, stale "evidence times without a date" limitation replaced by the retrospective note.
+README now has a short "AI assistance" section (user decision, 2026-11-14): Claude via Claude Code, under the
+author's direction; commits carry the co-author trailer; no AI or online API at analysis time.
+
 ## Evidence accuracy review (2026-11-14 ~16:10 UTC; committed locally, not pushed)
 
 Evidence wording only; detector behaviour unchanged. Changed: `src/straightrows/evidence.py`, `src/dashboard.py`

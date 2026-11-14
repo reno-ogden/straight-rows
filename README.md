@@ -23,11 +23,28 @@ py -3.11 -m venv .venv
 ```
 
 `requirements.txt` pins the exact versions installed in the tested environment (pandas 3.1.1,
-numpy 2.4.6, matplotlib 3.11.2, pytest 9.2.0, among others). A fresh install from it on a clean
-machine has not been tested. The dashboard uses the pinned streamlit 1.67.0 and altair 6.3.0; some other
-pinned packages (for example pydeck) are not imported by the code.
+numpy 2.4.6, matplotlib 3.11.2, pytest 9.2.0, streamlit 1.67.0, altair 6.3.0, among others). Some pinned
+packages (for example pydeck) are not imported by the code.
+
+**Clean-copy reproduction (2026-11-14, same Windows machine):** a fresh `git clone` into a temporary folder,
+`py -3.11 -m venv .venv` (Python 3.11.0, bundled pip 22.3) and the install command above succeeded from PyPI
+with certificate verification on; `pip check` reported no broken requirements. Every command in this README
+then ran in that copy with the results stated below. Not tested: another machine or operating system, another
+Python version, an offline install.
 
 ## Get and verify the data
+
+**What the data is.** A **synthetic simulation** produced by the organizers (Bluestaq) for this hackathon:
+72 h of 1 Hz telemetry for three simulated tractors (`farm\tractor_telemetry.csv.gz`), simulated SDA feeds
+(`sda\sgi_indices.json` with Kp and Dst, `sda\scintillation_series.json` with regional S4,
+`sda\constellation_advisories.json`, `sda\rfi_reports.json`) and development labels for May 4–5
+(`labels\train_episodes.json`). No real farm, receiver or space-weather measurements are involved.
+
+**How labels are used.** Only the 12 development episodes have labels. The detection code
+(`src\straightrows\`) never reads them; they are read only by `src\evaluate_dev.py`, `tests\test_pipeline.py`
+and the dashboard's separate "Development labels" section, to score and inspect development output. Parameters
+were chosen on these labels, so development scores are in-sample. The evaluation day (May 6) has no public
+labels.
 
 The dataset is **not** in this repository. It is published by the organizers as
 `StraightRows_Student_Package.zip` on the
@@ -35,26 +52,44 @@ The dataset is **not** in this repository. It is published by the organizers as
 `scripts\get_data.py` and `DATASET_SHA256` are the official, unmodified starter files
 (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-**Local-zip workflow (tested):** download the zip in a browser, then:
+**Direct download (official default):**
+
+```bat
+.venv\Scripts\python.exe scripts\get_data.py
+```
+
+It downloads the release zip, checks its SHA-256 against `DATASET_SHA256` (`14bfdf4c…174546`), refuses a
+mismatch, and extracts only the `data\` folder into `data\` (existing files with the same names are replaced).
+Expected result: `Extracted 6 data files into …\data`. In the clean-copy reproduction (2026-11-14) this worked,
+and the six files were byte-identical to the development copy. Earlier on the same machine it failed with
+`SSL: CERTIFICATE_VERIFY_FAILED` because that Python installation did not trust the certificate chain; if that
+happens, use the local zip below. Do **not** disable certificate verification.
+
+**Local-zip fallback:** download the zip in a browser, then:
 
 ```bat
 .venv\Scripts\python.exe scripts\get_data.py --zip C:\path\to\StraightRows_Student_Package.zip
 ```
 
-The script checks the zip's SHA-256 against `DATASET_SHA256`
-(`14bfdf4c…174546`), refuses a mismatch, and extracts only the `data\` folder into `data\`
-(existing files with the same names are replaced). Expected result: `Extracted 6 data files`.
+The same checksum check and extraction apply. This path was used to obtain the development copy earlier;
+it was not re-run in the clean-copy reproduction (the zip was not on disk).
 
-**Direct download** (`.venv\Scripts\python.exe scripts\get_data.py` with no arguments) is the
-official default. On the development machine it failed with
-`SSL: CERTIFICATE_VERIFY_FAILED`, because that Python installation does not trust the certificate
-chain. Use the local-zip workflow in that case. Do **not** disable certificate verification.
+## Network and offline operation
+
+| Step | Network |
+|---|---|
+| `pip install -r requirements.txt` | PyPI (once) |
+| `scripts\get_data.py` without `--zip` | GitHub release download (once) |
+| `scripts\get_data.py --zip …`, tests, pipeline, validation, development evaluation, plots | none |
+| Dashboard | none: served on `localhost`, no web fonts, map tiles or external scripts; usage telemetry off |
+
+No step calls an LLM or any online API at analysis time.
 
 ## Run
 
 ```bat
-:: Tests (need data\; they are skipped if the dataset is missing)
-.venv\Scripts\python.exe -m pytest -q tests
+:: Tests (-rs prints the reason for any skipped test)
+.venv\Scripts\python.exe -m pytest -q -rs tests
 
 :: Generate the submission file (creates the output folder if needed)
 .venv\Scripts\python.exe src\run_pipeline.py --data data --output outputs\submission.json --github-handle reno-ogden --repo-url https://github.com/reno-ogden/straight-rows
@@ -69,6 +104,21 @@ chain. Use the local-zip workflow in that case. Do **not** disable certificate v
 .venv\Scripts\python.exe src\plot_dev_episodes.py --data data --out outputs\dev_plots
 .venv\Scripts\python.exe src\dev_episode_stats.py --data data --out outputs\dev_episode_stats.csv
 ```
+
+**Check that the dataset tests actually ran.** With `data\` present the expected test result is
+`33 passed` (3 dataset tests + 30 synthetic tests). Without `data\`, pytest still exits successfully but reports
+`30 passed, 3 skipped` with the reason `dataset not downloaded`: that is **not** a successful analysis run.
+`run_pipeline.py` and `evaluate_dev.py` stop with `Dataset not found …` and write nothing if `data\` is missing.
+
+`src\validate_submission.py` is the official validator (`starter/submission/validate_submission.py`), identical
+apart from line endings (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+
+Clean-copy results (2026-11-14): `33 passed`; `Wrote 7 detections`; both the repository copy and a freshly
+downloaded official validator print `OK: 7 detection(s)`; the output was byte-identical to the development
+copy's `outputs\submission.json` and to a second run; `evaluate_dev.py` reproduced the table under
+*Development results*; both optional analysis scripts ran (12 plots); the dashboard loaded headlessly
+(Streamlit `AppTest`: overview, a report, window switch). The dashboard was not opened in a browser from the
+clean copy.
 
 | Output | Written by | Notes |
 |---|---|---|
@@ -232,7 +282,8 @@ evidence that they are useful or harmless (see `docs/pipeline.md`, "Suspected mu
 3. The evaluation-window output passes the official validator, and every detection has non-empty
    evidence.
 
-Without `data\` these three are skipped rather than failed.
+Without `data\` these three are skipped rather than failed, so a passing run without the dataset does not
+show that the analysis works (see *Check that the dataset tests actually ran* above).
 
 `tests/test_working_state.py` has twelve synthetic tests (no dataset needed) for the working-state
 gate: parked-only poor reception creates no space-weather, jamming or equipment-fault detection;
@@ -274,7 +325,16 @@ that evidence numbers are right, or exercise the command-line scripts.
 - Whether SDA timestamps mark the start or end of their interval, and whether RFI `ts` is the
   observation or the report time, is not documented. The pipeline uses the latest value at or
   before each minute.
-- Evidence times are HH:MM (UTC) without a date.
+- The analysis is retrospective: intervals are assembled after the whole window is available, so onset
+  results are not real-time alerting performance.
+
+## AI assistance
+
+This project was built with the help of Claude (Anthropic), an AI assistant, used through Claude Code. It
+wrote and revised much of the code, tests and documentation and ran the checks described here, under the
+author's direction; the author chose the approach and approved each change. Commits carry a
+`Co-Authored-By: Claude` trailer. No AI model or online API is used when the analysis runs: detections,
+evidence and the dashboard come only from the deterministic code in this repository and the official data.
 
 ## Submission
 

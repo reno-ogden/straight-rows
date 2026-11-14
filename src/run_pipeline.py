@@ -9,6 +9,7 @@ Submissions are public: never add your email address or student ID.
 """
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from straightrows.config import Config
@@ -24,6 +25,9 @@ def main():
     p.add_argument("--repo-url", required=True)
     p.add_argument("--display-name", default=None)
     a = p.parse_args()
+    if not (Path(a.data) / "farm" / "tractor_telemetry.csv.gz").is_file():
+        sys.exit(f"Dataset not found in '{a.data}'. Get it first (README: 'Get and verify the data'). "
+                 "No output was written.")
     sub = run(load(a.data), a.github_handle, a.repo_url, Config(), display_name=a.display_name)
     Path(a.output).parent.mkdir(parents=True, exist_ok=True)  # same path, created if missing
     with open(a.output, "w", encoding="utf-8") as f:
