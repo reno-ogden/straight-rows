@@ -76,6 +76,7 @@ def main():
         "pipeline multi-label, no bridge": Config(bridge_gap_s=0.0, require_working=False),
         "pipeline multi + bridge, no gate": Config(require_working=False),
         "pipeline default (+ working gate)": Config(),
+        "default + multipath (opt-in)": Config(detect_multipath=True),
     }
     if a.sweep:
         for g in (60, 120, 180, 240, 300, 360):

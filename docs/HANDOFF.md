@@ -27,6 +27,30 @@
    (copy of `outputs/submission.json`); open one PR to `main` before 22:00 UTC; confirm the Submission check is green.
 3. Any push to the PR after 22:00 UTC makes it late.
 
+## Suspected multipath — opt-in detector (2026-11-14 ~16:00 UTC; committed locally, not pushed)
+
+**Decision (user, 2026-11-14): keep as opt-in, default off.** The submission keeps the default pipeline
+(multipath off); `detect_multipath=True` remains available for analysis and development scoring.
+
+On `feat/blue-investigation-workspace` (= `origin/main` @ `a2df1e3`). New `src/straightrows/multipath.py`,
+`tests/test_multipath.py`; changed `config.py` (seven `mp_*`/`detect_multipath` fields), `pipeline.py` (append
+multipath runs when enabled), `export.py` (multipath evidence; concurrency lists ignore multipath reports),
+`evaluate_dev.py` (one extra variant), `README.md`, `docs/pipeline.md`, this file. No other rule, threshold or
+assembly parameter changed. **Default is off**, so `submission.json` and the dashboard are unchanged.
+
+- Rule, parameters, representation, results and inspection: `docs/pipeline.md` → "Suspected multipath".
+- Checks run: `pytest -q tests/test_multipath.py` 18 passed (mutation check: weakening drop, mean tolerance,
+  join, min length and max length each makes a test fail); full suite 33 passed; `evaluate_dev.py`: STARTER
+  equivalence IDENTICAL on both windows; default 27.29 / macro-F1 0.693 / onset 0.664 / 8/12 / 1 FP →
+  with multipath 34.79 / 0.893 / 0.830 / 10/12 / 1 FP (in-sample); other classes' P/R/F1 identical;
+  non-multipath dev detections and evidence byte-identical. Default regenerated to
+  `outputs/multipath-default-off-20261114T154519Z/` → byte-identical to the reference submission.
+  Evaluation window with multipath on (counts/validity only): 490 detections, validator OK. Dashboard headless
+  suite (default config): no failures.
+- Not done: dashboard support for hundreds of short detections; any change to `submission.json`.
+- To enable: set `detect_multipath: bool = True` in `config.py` (then regenerate, validate, and expect ~490
+  evaluation detections — close to the 500 limit).
+
 ## Milestone verification (2026-11-14 ~15:30 UTC) — checkpoint `2e97e47`
 
 Verification only; no code or data changed. Branch `feat/blue-investigation-workspace` @ `2e97e47`, clean tree.
@@ -200,7 +224,9 @@ browser (possibly pressed during a rerun); single presses worked.
 2. **Dashboard**: interactive incident report implemented and committed on local branch `feat/blue-investigation-workspace`
    (see "Dashboard overhaul"). Next: user review; push/merge only on explicit authorization; accessibility
    checks; optional automatic playback (no blocking loops).
-3. Multipath detection — **deferred**; needs separate user authorization; not part of the redesign.
+3. Multipath detection — implemented as an **opt-in** detector (`Config.detect_multipath`, default off),
+   committed locally (not pushed); user decision: keep opt-in, not enabled for the submission (see "Suspected
+   multipath" at the top).
 4. Loader robustness (unchanged from below).
 
 ## Repository state (as of 02:20 CST)

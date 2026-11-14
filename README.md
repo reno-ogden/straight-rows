@@ -178,6 +178,9 @@ The charts show the inputs behind each detection. They do not independently vali
 5. **Assembly** (`assembly.py`): minute runs → bridge same-cause gaps ≤ 180 s → drop runs < 180 s →
    merge the same cause across tractors. Different causes are never merged, so concurrent causes stay
    separate detections.
+   **Suspected multipath** (`multipath.py`, opt-in via `Config.detect_multipath`, **off by default**) is a
+   separate 1 Hz path: short min-C/N0 dips (≥ 6 dB below a 121 s running median for 8–60 s, mean C/N0 within
+   2 dB of its own median, tractor working) become one detection per tractor per dip, outside minute assembly.
 6. **Evidence** (`evidence.py`): strings computed from the 1 Hz telemetry and SDA feeds over each
    detection (affected vs. own prior 30 min vs. other tractors, S4/Kp/Dst, nearby RFI reports,
    concurrent detections).
@@ -188,7 +191,8 @@ Inputs and how they are treated:
 - **Cross-track error** comes from the separate simulated guidance monitor (per the official
   guide). It is used as its own input (metres). It is exactly 0 while parked.
 - **Reported GNSS position (lat/lon) is not trusted ground truth.** Detection never uses it. It
-  appears only in evidence, as the approximate distance from an RFI report's centre.
+  appears only in evidence: the approximate distance from an RFI report's centre, and (multipath, opt-in)
+  the reported distance between successive dips, labelled as unverified and spoofable.
 - `src/baseline.py` is the **official starter baseline modified** to use S4 instead of Kp
   (commit `b40c92e`). It is kept for comparison; the pipeline's `STARTER` config reproduces it exactly.
 
@@ -204,9 +208,14 @@ evaluation labels are not public, and the organizers score once after the lock.
 | `src/baseline.py` (S4-modified starter) | 21.29 | 0.553 | 0.497 | 7/12 | 3 |
 | Pipeline without the working gate | 25.04 | 0.653 | 0.580 | 8/12 | 2 |
 | Pipeline (default) | 27.29 | 0.693 | 0.664 | 8/12 | 1 |
+| Pipeline + multipath (opt-in, not default) | 34.79 | 0.893 | 0.830 | 10/12 | 1 |
 
-Still missed on development data: TRN-05 (jamming during the storm), TRN-08 (spoofing during the storm),
-TRN-11/12 (multipath). Remaining false positive: a 6-minute spoofing fragment on T3 at 05-05 22:00.
+Still missed on development data with the default pipeline: TRN-05 (jamming during the storm), TRN-08
+(spoofing during the storm), TRN-11/12 (multipath). Remaining false positive: a 6-minute spoofing fragment on
+T3 at 05-05 22:00. With the opt-in multipath detector, TRN-11 and TRN-12 are matched (onset +0 s) and no other
+class changes, but it adds 951 short reports on the two development days; 949 are unmatched and are not
+counted as false positives only because the scorer exempts short multipath reports. That exemption is not
+evidence that they are useful or harmless (see `docs/pipeline.md`, "Suspected multipath").
 
 ## Tests
 
@@ -226,12 +235,24 @@ gate: parked-only poor reception creates no space-weather, jamming or equipment-
 the same symptoms while working do; detections start and end at working-state transitions; long stops
 are not bridged; a stop of at most 180 s inside one incident is.
 
+`tests/test_multipath.py` has eighteen synthetic tests for the opt-in multipath path: a 17 s dip gives
+one detection with exact 1 Hz boundaries that survives minute assembly; brief blips, shallow dips, long lows,
+dips with a falling mean C/N0 and dips while parked do not trigger; brief recoveries and missing samples inside
+a dip are joined (only real samples counted), longer gaps are not; no detection without a running-median
+baseline; window boundaries clip; repeated dips are each reported once with recurrence evidence; co-timed dips
+stay separate per tractor; a concurrent equipment fault is unchanged and kept as its own cause; the detector is
+off by default and in `STARTER`.
+
 The tests do **not** establish that detections are correct, check the development score, check
 that evidence numbers are right, or exercise the command-line scripts.
 
 ## Limitations and known issues
 
-- **Multipath is not detected.** No `MULTIPATH` detections are produced.
+- **Multipath is not detected by default.** The opt-in detector (`Config.detect_multipath=True`) matches
+  both development labels but reports every recurring dip on every tractor (~160 per tractor per day; 490
+  detections in the evaluation window, 10 below the validator's 500 limit). It cannot tell which tractor a
+  label would name, it can report an equipment-fault antenna dropout a second time as multipath, and the
+  dashboard is not adapted to that volume.
 - **Confidence is fixed at 0.5** for every detection. It is not calibrated and is not a probability.
 - **Dashboard limitations:** no automatic playback (manual replay only). Streamlit columns only stack below
   ~640 px, so between that and ~1100 px the report's two columns get narrow. Screen-reader, keyboard-only

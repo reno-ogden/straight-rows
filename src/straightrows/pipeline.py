@@ -1,4 +1,5 @@
 """Run the stages in order. `detect` returns intervals; `run` adds evidence + export."""
+from . import multipath
 from .assembly import assemble
 from .attribution import attribute
 from .candidates import flag
@@ -11,7 +12,12 @@ def detect(d, cfg=Config(), window=EVAL):
     feat = minute_features(d, window)
     flags = flag(feat, cfg)
     rows = attribute(flags, cfg)
-    return assemble(rows, cfg, window)
+    dets = assemble(rows, cfg, window)
+    if cfg.detect_multipath:
+        # Separate 1 Hz path: short per-tractor runs that bypass minute assembly (minimum duration, bridging,
+        # cross-tractor merge). Existing detections are left exactly as assembled.
+        dets = sorted(dets + multipath.detect(d, cfg, window), key=lambda m: (m["start"], m["cause"]))
+    return dets
 
 
 def run(d, handle, repo_url, cfg=Config(), window=EVAL, display_name=None):

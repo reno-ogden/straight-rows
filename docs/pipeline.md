@@ -18,6 +18,7 @@ python -m pytest -q tests
 | Candidates | `candidates.py` | Cause-agnostic flags: `cn0_low`, `xte_high`, `link_low`, `dropout`, `working`, fleet count `n_cn0_low`. |
 | Attribution | `attribution.py` | One independent test per cause → zero or more causes per tractor-minute. |
 | Assembly | `assembly.py` | Minute runs → bridge short gaps → minimum-duration filter → merge same cause across tractors. Different causes never merge. |
+| Multipath (opt-in) | `multipath.py` | Separate 1 Hz path, off by default (`Config.detect_multipath`): short per-tractor min-C/N0 dips → one detection per tractor per dip, outside minute assembly. |
 | Evidence | `evidence.py` | Strings computed from the 1 Hz telemetry and SDA feeds over each interval. |
 | Export | `export.py` | Template-shaped `submission.json`. |
 
@@ -96,6 +97,57 @@ working tractors). This was counted after the change, not used to choose it.
 Caveat: parameters were chosen and scored on the same 12 episodes (no held-out split), so this is
 an in-sample comparison. The flat 120–360 s plateau is the main argument that it generalises.
 
+## Suspected multipath (opt-in, `Config.detect_multipath`, default off) — 2026-11-14
+
+Decision: kept as an opt-in analysis option; the submission uses the default pipeline (multipath off).
+
+**Rule** (`multipath.py`, per tractor, raw 1 Hz): min C/N0 at least `mp_drop_db` = 6 dB below its centred
+`mp_window_s` = 121 s running median, mean C/N0 within `mp_mean_tol_db` = 2 dB of its own running median, and
+the tractor working in that minute (the pipeline's 1-min mean speed > 1.0 m/s). Qualifying seconds at most
+`mp_join_s` = 4 s apart are joined (brief recoveries, missing samples); runs of `mp_min_s` = 8 to `mp_max_s` =
+60 s are reported. No interpolation; seconds without a running median (too little surrounding data) never
+qualify. A centred 121 s median is itself pulled down by lows longer than about 60 s, so the 60 s limit is a
+backstop (tested separately with a wider window).
+
+**Why these values.** Development data only: the two labeled examples (TRN-11 T3, TRN-12 T1, 17 s each) are a
+7–10 dB drop of min C/N0 with unchanged mean C/N0, satellites, RTK link and cross-track error. A dev-window
+census (exploratory threshold 5 dB / 121 s) found ~160 such dips per working tractor per day, 12–17 s long,
+recurring every ~351 s at one reported-latitude band and co-timed on all three tractors in most cases.
+No labeled timestamps, latitudes, expected counts or evaluation-window patterns are used.
+
+**Representation.** One detection per tractor per dip with 1 Hz boundaries. These runs bypass minute
+assembly: the 180 s minimum duration would discard them, minute boundaries cap time IoU with a 17 s label at
+0.28 (the scorer needs 0.30), and the cross-tractor merge would create three-tractor detections that cannot
+match a single-tractor label (tractor IoU 1/3). Multipath never suppresses or alters other causes; concurrency
+lists in existing detections' evidence ignore multipath reports, so those detections stay byte-identical.
+
+**Development results (in-sample; official scorer).** Default vs default + multipath:
+
+| | Diagnostic /40 | Macro-F1 | Onset | Hits | FP | MP P / R / F1 |
+|---|---:|---:|---:|---:|---:|---|
+| Default (multipath off) | 27.29 | 0.693 | 0.664 | 8/12 | 1 | 0 / 0 / 0 |
+| + multipath | 34.79 | 0.893 | 0.830 | 10/12 | 1 | 1.00 / 1.00 / 1.00 |
+
+Other classes unchanged (SW 1.00, JAM 0.80, SPF 0.67, EF 1.00 — P and R identical); the 9 non-multipath
+detections and their evidence are byte-identical; misses TRN-05 and TRN-08 unchanged; the one FP (SPF T3
+05-05 22:00) unchanged. TRN-11 matched by T3 14:04:18–14:04:33 (IoU 0.88, onset +0 s); TRN-12 by T1
+19:00:35–19:00:52 (IoU 1.00, onset +0 s), kept separate from the concurrent space-weather detection.
+
+**Cost.** 951 multipath reports on the 2 dev days (157–161 per tractor per day; 8–22 s, median 17 s), of which
+949 are unmatched and counted "benign" only by the scorer's ≤180 s multipath exemption. Manual inspection:
+99.9 % sit at the recurrent reported-latitude band and 924 are co-timed on all three tractors (consistent with
+a recurring environmental effect), but some are look-alikes: e.g. T2 05-04 13:04:54 (min 11.2 dB-Hz) and
+13:46:10 (90 m off the band, single tractor) fall inside the T2 equipment-fault/spoofing episodes and are
+most likely antenna dropouts reported a second time as multipath. The exemption does not make these harmless.
+
+**Evaluation window (counts and validity only, after the change):** 7 → 490 detections with multipath on
+(10 below the validator's 500 limit), validator OK, non-multipath entries unchanged, ~535 KiB.
+
+**Limitations.** The labeled tractor is not distinguishable in telemetry (all three dip together); parameters
+come from two labels plus an unlabeled census; it cannot separate antenna dropouts inside an equipment fault;
+reported position is descriptive only (unverified, spoofable); confidence stays the fixed 0.5; the dashboard
+is not adapted to hundreds of short detections (it uses the default config, so multipath is off there).
+
 ## Development history: what was looked at
 
 - Labels were used only from the development window (`data/labels/train_episodes.json`). The
@@ -122,7 +174,8 @@ These are not known to be correct.
 
 - TRN-05: jamming inside a storm (absolute C/N0 rule plus S4 cannot separate it).
 - TRN-08: spoofing inside a storm.
-- TRN-11/12: multipath (no detector yet).
+- TRN-11/12: multipath — matched only with the opt-in detector (`detect_multipath=True`, off by default);
+  see "Suspected multipath" above.
 - False positive: 05-05 22:00–22:06 spoofing fragment (T3).
 - Confidence is a constant 0.5 (not calibrated).
 - The fleet count used by the space-weather test (`n_cn0_low == 3`) still counts parked tractors; only the

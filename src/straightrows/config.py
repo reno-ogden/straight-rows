@@ -44,6 +44,17 @@ class Config:
     # xte_high. Official guide: scored episodes concern working tractors; poor reception while
     # parked alone is not a scored guidance event.
     require_working: bool = True
+    # --- suspected multipath (straightrows/multipath.py) ---
+    # Off by default: enabling it adds one short detection per tractor per dip (about 160 per working tractor
+    # per development day), which approaches the validator's 500-detection limit. All values were chosen on the
+    # development window only (see docs/pipeline.md); none uses labeled timestamps or positions.
+    detect_multipath: bool = False
+    mp_drop_db: float = 6.0          # 1 Hz min C/N0 at least this far below its running median
+    mp_window_s: float = 121.0       # centred running-median window (s)
+    mp_mean_tol_db: float = 2.0      # mean C/N0 must stay within this of its running median
+    mp_join_s: float = 4.0           # join qualifying seconds separated by at most this (recoveries, gaps)
+    mp_min_s: float = 8.0            # shortest dip reported (shorter = normal fluctuation)
+    mp_max_s: float = 60.0           # longest dip reported (longer lows belong to other causes)
 
 
 # Historical baseline: reproduces src/baseline.py exactly (no working gate except on XTE).
