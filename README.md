@@ -24,8 +24,8 @@ py -3.11 -m venv .venv
 
 `requirements.txt` pins the exact versions installed in the tested environment (pandas 3.1.1,
 numpy 2.4.6, matplotlib 3.11.2, pytest 9.2.0, among others). A fresh install from it on a clean
-machine has not been tested. It also pins packages the code does not import yet (for example
-streamlit); they are kept for a possible dashboard.
+machine has not been tested. The dashboard uses the pinned streamlit 1.67.0 and altair 6.3.0; some other
+pinned packages (for example pydeck) are not imported by the code.
 
 ## Get and verify the data
 
@@ -79,6 +79,49 @@ chain. Use the local-zip workflow in that case. Do **not** disable certificate v
 
 `outputs\` is not committed. The submission file is submitted by copying it into a fork of the
 official repository (see *Submission* below).
+
+## Dashboard
+
+```bat
+.venv\Scripts\python.exe -m streamlit run src\dashboard.py
+```
+
+Run it from the repository root so `.streamlit\config.toml` is used (dark theme, no usage telemetry,
+no auto-opened browser, served on localhost only). Then open http://localhost:8501. It needs no network
+access: all page resources are served by the local Streamlit server.
+
+**Data source.** The dashboard calls the pipeline itself: `straightrows.io.load`, `pipeline.detect`,
+`export.to_submission` (so detections, actions, confidence and evidence are exactly what goes into
+`submission.json`), and `features.minute_features` + `candidates.flag` for the working flag. It has no
+detector of its own and does not use `devdata.py`. Results are cached per data folder (keyed by file
+size and modification time), window and `Config` values, so changing inputs or configuration recomputes.
+
+**What it shows.**
+
+- *Incidents:* pipeline detections for the chosen window (development or evaluation, UTC bounds shown),
+  with start/end in UTC, tractors, cause and operator action. Select one to see its evidence, plain-language
+  cause/action, and confidence ("fixed heuristic value 0.5; not calibrated"). A custom interval can be
+  inspected when there is no detection to select.
+- *Aligned charts* on one UTC time axis: detection lanes; working state (per minute, from the pipeline flag;
+  "working" bars are thicker than "parked", so state is not shown by colour alone); cross-track error (m,
+  signed, bin mean); mean C/N0 (dB-Hz, bin mean); minimum C/N0 (dB-Hz, bin minimum); satellites (bin
+  median); RTK link up (% of samples); RTK_FIXED (% of samples); regional S4 (15-min values) and Kp
+  (3-hour values), each drawn as the latest published value. Display bins: 1 min (identical to the
+  pipeline's features for the shared channels; verified), 10 s, or 1 s for intervals of at most 30 minutes.
+  Lines break at missing bins and never join different tractors. Tractor colours are the same on every
+  chart; tractors outside the selected detection are dashed. RFI reports and advisories in the interval are
+  listed with their timestamps.
+- *Development labels* (development window only) are in a separate, clearly labelled section and lane,
+  never mixed with detections. A button scores the detections against them with the official scorer
+  (in-sample).
+- *Fleet comparison:* per-tractor statistics for the same interval (raw 1 Hz telemetry; working share from
+  the pipeline flag), and an optional plot of **reported GNSS position** (converted to metres around the
+  interval mean with a flat-earth approximation; not ground truth; no guidance line is drawn because the
+  dataset has no reference geometry).
+- *Methodology and limitations,* plus provenance: window, UTC bounds, data folder, git commit, and every
+  `Config` value.
+
+The charts show the inputs behind each detection. They do not independently validate the detector.
 
 ## How it works
 
@@ -150,7 +193,10 @@ that evidence numbers are right, or exercise the command-line scripts.
 
 - **Multipath is not detected.** No `MULTIPATH` detections are produced.
 - **Confidence is fixed at 0.5** for every detection. It is not calibrated and is not a probability.
-- **No dashboard exists yet**; analysis is the plotting and statistics scripts above.
+- **Dashboard limitations:** chart width is fixed (about 950 px), so very narrow windows scroll sideways;
+  each chart panel repeats its legend; the reported-position plot does not use equal x/y scales.
+  `straightrows.io.load` fails if the RFI or advisory feed is an empty list (`KeyError: 'ts'`); the
+  dashboard then shows that error rather than a page.
 - **Working state** = 1-minute mean speed above 1.0 m/s. Speed is only ever 0 or 4.5 m/s, so that means
   at least 14 moving seconds in the minute. All causes require the attributed tractor to be working.
   A stop of at most 180 s inside one incident is bridged and therefore included in the interval.

@@ -165,3 +165,20 @@ Working-state gate run, 2026-11-14 (on top of `c984ee4`):
   macro-F1 0.693 / onset 0.664 / 8 of 12 correct / 1 FP (before: 25.04 / 0.653 / 0.580 / 8 of 12 / 2).
 - Evaluation-window detections with and without the gate: 7 and 7, none different, so
   `outputs/submission.json` was not regenerated.
+
+Dashboard (`src/dashboard.py`), 2026-11-14, on top of `ec107b8`, no analytical source changed:
+
+- Launched with `python -m streamlit run src\dashboard.py` and inspected in a browser at 1440×900:
+  both windows, selecting detections (#1 equipment fault, #3 space weather on the evaluation day), the
+  concurrent T2 equipment fault + spoof (development day), a custom interval, 1 min / 10 s / 1 s display
+  (1 s correctly refused for a 3-hour interval), a single tractor, the labels section, the in-dashboard scorer,
+  fleet comparison, reported-position plot, methodology/provenance.
+- Displayed evaluation detections equal `outputs/submission.json` (all 7, including evidence). 1-minute display
+  bins equal the pipeline's minute features for mean C/N0, min C/N0, cross-track error and link fraction
+  (max difference 0 over 720 tractor-minutes). The in-dashboard score (27.29, macro-F1 0.693, onset 0.664,
+  1 FP) matches `evaluate_dev.py`.
+- Missing data folder: error naming the missing files plus the data command. Synthetic quiet data: "No
+  detections in this window" and custom-interval mode; no labels file: "No labels file in this data folder".
+  Synthetic data with empty RFI/advisory lists: `io.load` raises `KeyError: 'ts'`, shown as an error.
+- Network: all 148 page resources came from `localhost:8501`; usage telemetry disabled in `.streamlit/config.toml`.
+- `python -m pytest -q tests`: 15 passed.

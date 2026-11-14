@@ -1,0 +1,14 @@
+# Dashboard settings (local only). Launch from the repository root.
+[browser]
+gatherUsageStats = false   # no usage telemetry; the demo needs no network
+
+[server]
+headless = true            # do not prompt or auto-open a browser
+address = "localhost"
+
+[theme]
+base = "dark"
+primaryColor = "#3987e5"
+backgroundColor = "#16171a"
+secondaryBackgroundColor = "#202227"
+textColor = "#e6e4df"
