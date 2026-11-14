@@ -3,6 +3,8 @@ data/
 *.zip
 # Generated submissions, plots, backups, and local demo/review artifacts
 outputs/
+# Official event guide: not redistributed here; use the organizers' published copy (see THIRD_PARTY_NOTICES.md)
+docs/Bluestaq_NDSU_Straight_Rows_Hackathon_Official.pdf
 # Python
 .venv/
 __pycache__/

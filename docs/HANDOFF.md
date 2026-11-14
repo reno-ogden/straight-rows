@@ -40,16 +40,24 @@ for change ownership, exact verification scope, independent detection traces, an
   `.venv\Scripts\python.exe -m streamlit run src\dashboard.py`, then open `http://localhost:8501`.
   Uses the same pipeline output, with cached visualization. The latest tooltip fix was checked in live
   headless Edge at 1366×768; accessibility and zoom remain untested.
-- **Submission readiness:** no final commit, current remote visibility, fork, PR, or green live Submission
-  check has been verified. Earlier offline PR-check simulation reported a private-repository blocker; do
-  not treat it as a current remote status check. Before publication, decide whether the Git author email
-  in history and the tracked official guide PDF are acceptable for a public solution repository.
+- **Sync update — 2026-11-14 ~19:10 UTC (Claude, after Codex):** live `git ls-remote` showed
+  `origin/main` = `c2c342c` (pushed earlier the same day); the solution repo returned 404 to an
+  unauthenticated API query (private); no `reno-ogden` fork, PR, or `submissions/reno-ogden` existed.
+  Official repo still `4b9c010`; its validator/PR-check/workflow unchanged. The final working tree
+  regenerated `outputs/submission.json` byte-identically (closing the gap that `config.py` was edited after
+  the recorded 17:43 regeneration); 41 tests passed. **User decisions:** (1) the personal author email in
+  Git history is **accepted** for publication — no history rewrite; (2) the guide PDF is **removed from the
+  tree** (untracked, ignored, local copy kept; earlier commits still contain it; the tracked copy differed
+  from the organizers' current published copy). Codex's reviewed work was committed as `5a52954`.
+- **Submission readiness:** no visibility change, fork, PR, or green live Submission check has been made or
+  verified. Earlier offline PR-check simulation reported a private-repository blocker; do not treat it as a
+  current remote status check.
   Committing, pushing, changing visibility, forking, opening a PR, and submitting each require the user's
   explicit authorization. The official fork PR must change exactly
   `submissions/reno-ogden/submission.json` and pass its Submission check before lock.
 
-**Next three tasks:** (1) User decides public-repository history/PDF exposure and authorizes publication
-steps (about 10–20 min to inspect/decide); (2) with authorization, make a focused solution-repo commit,
+**Next three tasks:** (1) ~~User decides public-repository history/PDF exposure~~ — done 19:10 UTC (email
+accepted; PDF removed from tree); (2) with authorization, make a focused solution-repo commit,
 verify the remote public state and push/merge the reviewed branch (about 15–30 min; accept only if code,
 docs, demo, and chosen JSON agree); (3) with authorization, create the official fork's one-file PR and
 confirm a green Submission check by 21:00 UTC (about 20–40 min, allow time for failures).
@@ -467,4 +475,5 @@ interpretation, action, uncertainty); exact submission evidence in an expander. 
 - Official repo: https://github.com/Bluestaq/ndsu-hackathon-submissions (main at `4b9c010` when last checked);
   dataset release `dataset-v1.4`.
 - Local: `README.md`, `CLAUDE.md`, `docs/pipeline.md` (method, results, worklogs), `docs/dev_findings.md`,
-  `docs/preflight.md`, `THIRD_PARTY_NOTICES.md`, official guide v1.4 `docs/Bluestaq_NDSU_Straight_Rows_Hackathon_Official.pdf`.
+  `docs/preflight.md`, `THIRD_PARTY_NOTICES.md`; official guide: organizers' copy at
+  `starter/docs/Bluestaq_NDSU_Straight_Rows_Hackathon_Official.pdf` in the official repo (no longer tracked here).

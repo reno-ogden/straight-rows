@@ -5,7 +5,8 @@ verification, and submission steps are in `README.md` and `docs/HANDOFF.md`. The
 fork, pull request, and green Submission check remain outstanding; earlier unchecked analysis items
 below have been updated where verified.
 
-Sources: official guide v1.4 (`docs/Bluestaq_NDSU_Straight_Rows_Hackathon_Official.pdf`),
+Sources: official guide v1.4 (published by the organizers at
+`starter/docs/Bluestaq_NDSU_Straight_Rows_Hackathon_Official.pdf` in the official repository; not tracked here),
 the starter README and `submissions/README.md` in `Bluestaq/ndsu-hackathon-submissions`,
 and the event site. Nothing here is a method, threshold, or result of ours.
 
