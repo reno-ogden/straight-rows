@@ -86,74 +86,80 @@ official repository (see *Submission* below).
 .venv\Scripts\python.exe -m streamlit run src\dashboard.py
 ```
 
-Run it from the repository root so `.streamlit\config.toml` is used (dark blue workspace theme, no
-usage telemetry, no auto-opened browser, served on localhost only). Then open http://localhost:8501 (if that
-port is busy, add `--server.port 8502`). It needs no network access: all page resources, including the
-reported-position plot, are served by the local Streamlit server; no map tiles are used.
+Run it from the repository root so `.streamlit\config.toml` is used (light report theme with a navy header, no
+usage telemetry, no auto-opened browser, localhost only). Open http://localhost:8501 (if that port is busy, add
+`--server.port 8502`). No network access is needed: no web fonts, map tiles or external scripts.
 
 **Data source.** The dashboard calls the pipeline itself: `straightrows.io.load`, `pipeline.detect`,
 `export.to_submission` (so detections, actions, confidence and evidence are exactly what goes into
-`submission.json`), `features.minute_features` + `candidates.flag` for the working flag, and
-`evidence._stats` for the measurement tables (the same function that writes the exported evidence numbers).
-It has no detector of its own and does not use `devdata.py`. Results are cached per data folder (keyed by
-file size and modification time), window and `Config` values, so changing inputs or configuration recomputes.
+`submission.json`), `features.minute_features` + `candidates.flag` for the working flag and per-minute flags,
+`attribution.tests` for per-minute rule results, and `evidence._stats` for measurements (the function behind the
+exported evidence numbers). It has no detector of its own. Results are cached per data folder (file size and
+modification time), window and `Config` values.
 
-**Layout (bounded panels, one selected detection at a time).**
+### Navigation: an interactive incident report
 
-- *Header:* FIELD SIGNAL, the window toggle (evaluation or development, UTC bounds), and short labels
-  (simulation data, retrospective, in-sample vs. not measured). *Settings* holds the data folder and chart
-  aggregation.
-- *Fleet overview:* T1/T2/T3 lanes across the window; each pipeline detection is a bar with a cause colour and
-  a text code (SW, JAM, SPF, EF); concurrent causes on one tractor sit in separate sub-rows. Click a bar, or
-  use the selector beneath it (keyboard-accessible fallback). The selected detection is outlined and its time
-  span shaded. *Detection register* lists all detections. *Custom interval* inspects any period instead.
-- *Incident summary:* "Pipeline attribution · suspected, not confirmed", plain-language cause, tractors, UTC
-  interval, operator action, and confidence 0.5 (fixed, not calibrated).
-- *Evidence (wide, left):* context before/after, tractor focus (All tractors / T1 / T2 / T3: dims the others,
-  never hides them), and the replay slider. Charts: a strip of overlapping detections (selected outlined,
-  adjacent faded) plus the pipeline's per-minute working state, one tall primary chart and two supporting
-  charts chosen for the attributed cause (display only), all on the same UTC axis with the detection shaded
-  and a replay cursor. *Inspect all signals* and *SDA reports in this interval* are expandable.
-- *Decision (narrow, right):* recommended action, up to three measured observations for the cause's primary
-  channels (detection vs. prior 30 working minutes vs. other tractors), and the main uncertainty. *Full
-  measurements*, *Rule and uncertainty details*, *Exact evidence exported to submission* and *Identifiers*
-  expand.
-- *Replay readout:* for the cursor second, the raw 1 Hz sample of each tractor (speed, working flag of that
-  minute, signed cross-track error, mean/min C/N0, satellites, fix state, RTK link) and episode-level
-  detection membership, plus the S4 and Kp values in force with their publication time. Only an exact
-  timestamp match is shown (tolerance 0 s; the telemetry is 1 Hz without gaps); otherwise *no sample*.
-- *Before · during · after:* the same `evidence._stats` over 30 working minutes before onset (the evidence
-  baseline), the detection itself, and 30 working minutes after the end (display-only mirror of the
-  baseline). Empty windows show *unavailable*; other detections overlapping these windows are named.
-- *Reported GNSS position:* "may be misleading during spoofing". 10 s mean reported positions in metres from
-  the interval's mean position (flat-earth conversion), equal scale on both axes, trails broken at gaps,
-  bright up to the cursor, and 1 Hz markers at the cursor. Retrospective playback of reported positions, not
-  verified motion; no field boundary, intended row or true location is drawn.
-- *Fleet comparison* and *Methodology and provenance* tabs: per-tractor statistics, methodology, display
-  choices and definitions, and provenance (window, data folder, git commit, every `Config` value).
+One level fills the screen at a time.
 
-**Using it (one minute).** Click a bar in the fleet ribbon (or pick it in the selector). Read the summary
-and the decision panel. Drag the replay slider or press *−1 min / −10 s / +10 s / +1 min / Onset*; the cursor
-moves on every chart and on the position plot, and the readout shows each tractor's sample at that second.
-Pick a tractor under *Tractor focus* to emphasise it everywhere.
+1. **Header** (navy band): FIELD SIGNAL, the Evaluation/Development switch with the window's UTC dates, one
+   status line (evaluation: unlabeled, accuracy unknown; development: labeled, scores in-sample) and *Settings*
+   (data folder).
+2. **Fleet overview — choose a case.** A T1/T2/T3 timeline of pipeline detections (cause colour + text code;
+   concurrent causes in sub-rows) and a list with one row per detection: suspected cause, tractors, UTC interval,
+   short action and *Open report*. Rows are in time order; nothing is ranked. Clicking a timeline bar or a row
+   opens that report; the last-opened detection stays highlighted in both. Below: *Explore a custom interval*,
+   the *Detection register* (exact exported fields), *Development labels* with in-sample scoring (development
+   window only) and *About this analysis* (methodology, display definitions, provenance).
+3. **Incident report — the finding and the decision.** A navigation bar (*← Back to fleet*, *‹ Previous*,
+   *n of N*, *Next ›*, and a slim clickable timeline), then a heading such as "Suspected equipment fault · T1"
+   with the UTC interval and duration. Two columns:
+   - *Evidence lab* (wide): one question per view —
+     **Guidance** (cross-track error), **Receiver health** (mean C/N0, min C/N0, satellites), **Link & fix**
+     (RTK link, RTK_FIXED), **Space / RF** (S4 with the scintillation level and RFI report ticks, Kp),
+     **Before / after** (per-tractor dot/slope chart + pooled table), **Position** (reported GNSS), **All
+     signals**. Each view has one prominent chart, a measured observation and access to the numbers. The default
+     view depends on the attributed cause (display only: spoofing → Guidance, jamming → Receiver health, space
+     weather → Space / RF, equipment fault → Receiver health or Link & fix by the same test the evidence uses).
+     Tractor focus (*All tractors*/T1/T2/T3) dims the others; *Chart options* sets context minutes and display
+     aggregation.
+   - *Finding* (narrow): recommended action (episode-level), what was observed during the detection, the pipeline
+     rule with how many minutes it was true per tractor, and the main uncertainty with the fixed confidence.
+   - *Details* (one expander): exported evidence and identifiers, full measurements, rules and confidence,
+     methodology and limitations, provenance.
+4. **Custom interval.** Any start hour and length, the same evidence lab (with *Compare tractors* instead of
+   Before / after).
 
-**Primary channels (display only; detection is unaffected).** Space weather: mean C/N0, regional S4,
-RTK_FIXED. Jamming: mean C/N0, satellites, cross-track error. Spoofing: cross-track error, mean C/N0,
-satellites. Equipment fault: chosen with the same test the evidence text uses. Antenna dropouts give min
-C/N0, satellites, mean C/N0; correction-link loss gives RTK link up, RTK_FIXED, min C/N0. Cross-track error
-is never primary for equipment fault: the rule does not use it, and a concurrent spoof can inflate it.
+**Replay.** Every time-based view has one scrubber (1 s steps inside the charted interval), *−10 s / +10 s*,
+*More* (±1 min, onset, end) and *Full readout*. The cursor is drawn on every chart and on the position plot. The
+inline inspector shows the raw 1 Hz values relevant to the current view; *Full readout* shows every field,
+the working flag of that minute, episode-level detection membership, and S4/Kp in force with their publication
+time. Only an exact timestamp match is shown (tolerance 0 s; the telemetry is complete 1 Hz); otherwise
+*no sample*. Episode attribution is never recomputed at the cursor.
+
+**Display-only statistics** (documented in the app under *Display definitions*):
+
+- *Rule-minute counts*: minutes in the detection where the cause's `attribution.tests` result (or a
+  `candidates.flag` column) is true, per tractor.
+- *Before / during / after*: `evidence._stats` over Before = 30 min before onset, working samples
+  (speed > 0) — the exported baseline; During = the detection, all samples — the exported statistics;
+  After = 30 min after the end, working samples — a display-only mirror. The table pools the affected tractors
+  as the evidence does; the chart applies the same function per tractor. Empty windows show *unavailable*;
+  overlapping detections are named.
+- *Axes*: mean C/N0 at least 20–50 dB-Hz, min C/N0 at least 0–50 dB-Hz, satellites/link/fix from zero, so small
+  changes are not magnified. Dotted amber lines are the pipeline's rule levels (applied by the rules to 1-minute
+  values).
 
 **Units and aggregation.** Cross-track error in metres (guidance-monitor channel, signed, bin mean); C/N0 in
-dB-Hz (mean C/N0: bin mean; min C/N0: bin minimum); satellites: bin median; RTK link up and RTK_FIXED: % of
-samples; S4 (15-min values) and Kp (3-hour values) drawn as the latest published value. Bins: 1 min (equal to
-the pipeline's features for the shared channels), 10 s, or 1 s for intervals of at most 30 minutes. Lines
-break at missing bins and never join different tractors; no smoothing. Tractor colours are fixed everywhere
-(T1 blue, T2 amber, T3 cyan, with text labels and marker shapes); cause colours use a separate hue set (violet,
-coral, magenta, slate) and always carry a text code. Lines for tractors outside the selected detection are
-dashed.
+dB-Hz (mean: bin mean; min: bin minimum); satellites: bin median; RTK link up and RTK_FIXED: % of samples; S4
+(15-min) and Kp (3-hour) as the latest published value. Bins: 1 min (equal to the pipeline's features), 10 s, or
+1 s for intervals up to 30 minutes. No smoothing; lines break at missing bins. Tractor colours are fixed (T1
+blue, T2 orange, T3 green, plus labels and marker shapes); causes use a separate hue set and always carry a text
+code; tractors outside the detection are dashed.
 
-**Development labels** (development window only) are in a separate, labelled section, never mixed with
-detections. A button scores the detections against them with the official scorer (in-sample).
+**Reported position** is labelled "may be misleading during spoofing": 10 s mean reported positions in metres
+from the interval's mean position (flat-earth conversion), equal scale, trails broken at gaps, bright up to the
+cursor, 1 Hz markers at the cursor. No field boundary, intended row or true location is drawn, and cross-track
+error is not derived from it.
 
 The charts show the inputs behind each detection. They do not independently validate the detector.
 
@@ -227,9 +233,10 @@ that evidence numbers are right, or exercise the command-line scripts.
 
 - **Multipath is not detected.** No `MULTIPATH` detections are produced.
 - **Confidence is fixed at 0.5** for every detection. It is not calibrated and is not a probability.
-- **Dashboard limitations:** no play/pause animation (manual replay only). The position plot is a fixed
-  330 px square. Very narrow windows stack the panels. Screen-reader, touch, zoom and colour-vision checks
-  have not been done. A replay button press made while the page is still re-running may be dropped.
+- **Dashboard limitations:** no automatic playback (manual replay only). Streamlit columns only stack below
+  ~640 px, so between that and ~1100 px the report's two columns get narrow. Screen-reader, keyboard-only
+  timeline use, touch, zoom and colour-vision checks have not been done. A replay button pressed while the page
+  is still re-running may be dropped.
   `straightrows.io.load` fails if the RFI or advisory feed is an empty list (`KeyError: 'ts'`); the
   dashboard then shows that error rather than a page.
 - **Working state** = 1-minute mean speed above 1.0 m/s. Speed is only ever 0 or 4.5 m/s, so that means

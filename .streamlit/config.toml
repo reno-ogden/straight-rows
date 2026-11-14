@@ -6,36 +6,34 @@ gatherUsageStats = false   # no usage telemetry; the demo needs no network
 headless = true            # do not prompt or auto-open a browser
 address = "localhost"
 
-# FIELD SIGNAL blue investigation workspace (project palette, not official Bluestaq branding).
-# Background #091321 · panels #122238 (set per panel in dashboard.py) · raised controls #1A304B
-# Primary blue #4C8DFF · cyan #35D0DB · text #EDF4FF · secondary text #A9BCD3 · amber #F5B85A · coral #FF7B86
+# FIELD SIGNAL interactive incident report (project design, not official Bluestaq branding).
+# Navy shell (#0B1A30, set in dashboard.py) · cool near-white canvas · white evidence surfaces ·
+# strong blue for selection and primary actions · cyan limited accent · amber/coral for warnings.
 [theme]
-base = "dark"
-backgroundColor = "#091321"
-secondaryBackgroundColor = "#1A304B"
-textColor = "#EDF4FF"
-primaryColor = "#4C8DFF"
-linkColor = "#7FB0FF"
-borderColor = "#2A4566"
+base = "light"
+backgroundColor = "#F3F6FA"
+secondaryBackgroundColor = "#E8EEF6"
+textColor = "#14213D"
+primaryColor = "#1F5FD1"
+linkColor = "#1F5FD1"
+borderColor = "#D3DCE8"
 showWidgetBorder = true
-baseRadius = "medium"
+baseRadius = "small"
 font = "sans-serif"
 headingFont = "sans-serif"
 codeFont = "monospace"
-codeBackgroundColor = "#1A304B"
-codeTextColor = "#EDF4FF"
-dataframeHeaderBackgroundColor = "#1A304B"
-dataframeBorderColor = "#2A4566"
-blueColor = "#4C8DFF"
-blueBackgroundColor = "#1A304B"
-blueTextColor = "#9CC1FF"
-grayBackgroundColor = "#1A304B"
-grayTextColor = "#C3D2E4"
-orangeColor = "#F5B85A"
-orangeBackgroundColor = "#3A2F1C"
-orangeTextColor = "#F5C77E"
-redColor = "#FF7B86"
-redBackgroundColor = "#3B1F2A"
-redTextColor = "#FF9EA6"
-# Tractor colours first (T1 blue, T2 amber, T3 cyan); used only for tractor identity.
-chartCategoricalColors = ["#4C8DFF", "#F5B85A", "#35D0DB", "#A98BFF", "#FF7B86", "#E7EEF8", "#9FB3C8", "#7BD88F"]
+codeBackgroundColor = "#E8EEF6"
+codeTextColor = "#14213D"
+dataframeHeaderBackgroundColor = "#E8EEF6"
+dataframeBorderColor = "#D3DCE8"
+blueColor = "#1F5FD1"
+blueBackgroundColor = "#E3ECFB"
+blueTextColor = "#163F8F"
+orangeColor = "#B7791F"
+orangeBackgroundColor = "#FBF0DC"
+orangeTextColor = "#7A4D0B"
+redColor = "#C2364A"
+redBackgroundColor = "#FBE5E8"
+redTextColor = "#8E1F30"
+# Tractor colours first (T1 blue, T2 orange, T3 green); used only for tractor identity.
+chartCategoricalColors = ["#1971C2", "#D9480F", "#2B8A3E", "#6741D9", "#C2255C", "#5C677D", "#0C8599", "#E67700"]

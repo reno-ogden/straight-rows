@@ -27,7 +27,43 @@
    (copy of `outputs/submission.json`); open one PR to `main` before 22:00 UTC; confirm the Submission check is green.
 3. Any push to the PR after 22:00 UTC makes it late.
 
-## Dashboard redesign — blue investigation workspace (2026-11-14 ~08:45 UTC)
+## Dashboard overhaul — interactive incident report (2026-11-14 ~14:30 UTC)
+
+- Committed on local branch `feat/blue-investigation-workspace` on top of `4d3eaab` (the dark workspace below);
+  not pushed, not merged. Changed: `src/dashboard.py` (rewritten), `.streamlit/config.toml` (light theme),
+  `README.md`, this file. No change to `src/straightrows/`, tests, data or schema.
+- Structure (one level at a time): navy header (window switch, dates, status, Settings) → **Fleet overview**
+  (timeline + one-row-per-detection list, register, custom interval, dev labels, About) → **Incident report**
+  (Back / Previous / n of N / Next / slim clickable timeline; heading "Suspected <cause> · <tractors>";
+  evidence lab | finding; one Details expander with tabs) → **Custom interval** lab.
+- Evidence lab views: Guidance, Receiver health, Link & fix, Space / RF, Before / after, Position, All signals
+  (custom: Compare tractors instead of Before / after). Default view per cause (display-only mapping);
+  equipment fault with dropouts puts min C/N0 first.
+- State: stable detection IDs (`class|start|tractors`); per-window keys for view, selection, focus, context,
+  aggregation; lab view keyed per detection (resets to the cause default); replay key per detection + context
+  (clamped to the interval). Selection validated against the window's detections every run.
+- New display-only statistics: per-tractor rule-minute counts (`attribution.tests`, `candidates.flag`);
+  per-tractor before/during/after via `evidence._stats`; axis floors for C/N0 (20–50, 0–50 dB-Hz) and
+  rule-level lines. Definitions are in the app (About / Details → Display definitions) and README.
+- Deferred: automatic playback; hover-synchronised cursor; responsive stacking between ~640 and ~1100 px.
+
+### Verification performed (overhaul content, 2026-11-14 ~14:30 UTC)
+
+| Check | Result |
+|---|---|
+| `pytest -q tests` | 15 passed |
+| `run_pipeline.py` → new `outputs/report-ui-verify-20261114T143021Z/` | byte-identical to `outputs/submission.json` and the readiness backup (SHA-256 `5e62e998…`) |
+| Repo validator + official validator (`4b9c010`) | `OK: 7 detection(s)` both |
+| `data/` SHA-256 before/after | unchanged |
+| Headless `AppTest` (scratch script, not in repo) | both windows; every detection (7 + 9) opened from the list with correct "n of N"; every lab view; focus; +10 s; Next→Previous returns to same report; Back; custom interval with every view; window switch keeps each window's state; missing data folder → message, no exception — no failures |
+| Dashboard eval detections == submission | True |
+| Browser (in-app pane), 1366×768 and 1920×1080 | fleet list + timeline; timeline click opens report; Next; Before/after; Position + T1 focus; +10 s; Full readout; development window; custom interval. Fixed during review: header button contrast, cramped lab toolbar and replay buttons, overlapping mini-timeline labels, auto-zoomed C/N0 axis exaggerating ~1 dB changes, EF primary channel. Screenshots: `outputs/report-ui-screenshots-20261114/` |
+
+Not checked: screen reader, keyboard-only timeline, touch, zoom, colour-vision simulation, widths below 1366 px,
+fresh clone. Screenshots 01–08 predate the C/N0 axis/threshold change (09 shows it); 02 still shows the
+overlapping mini-timeline labels fixed immediately afterwards.
+
+## Dashboard redesign — blue investigation workspace (2026-11-14 ~08:45 UTC; superseded by the overhaul above)
 
 - Committed on local branch `feat/blue-investigation-workspace` (from `main` @ `6c2bb1b`; not pushed, not
   merged; `git log --oneline -1` on that branch shows the hash). Changed:
@@ -67,9 +103,9 @@ browser (possibly pressed during a rerun); single presses worked.
 ## Revised priority order (2026-11-14)
 
 1. Submission (user actions above) — deadline 22:00 UTC.
-2. **Dashboard redesign**: implemented and committed on local branch `feat/blue-investigation-workspace`
-   (see section above). Next: user review in the browser; push/merge only on explicit authorization; optional play/pause
-   (must not use blocking loops); accessibility checks.
+2. **Dashboard**: interactive incident report implemented and committed on local branch `feat/blue-investigation-workspace`
+   (see "Dashboard overhaul"). Next: user review; push/merge only on explicit authorization; accessibility
+   checks; optional automatic playback (no blocking loops).
 3. Multipath detection — **deferred**; needs separate user authorization; not part of the redesign.
 4. Loader robustness (unchanged from below).
 
