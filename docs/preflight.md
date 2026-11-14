@@ -1,5 +1,10 @@
 # Preflight checklist — Straight Rows
 
+**Status update (2026-11-14 17:49 UTC):** This began as a kickoff checklist. Current implementation,
+verification, and submission steps are in `README.md` and `docs/HANDOFF.md`. The public-repository,
+fork, pull request, and green Submission check remain outstanding; earlier unchecked analysis items
+below have been updated where verified.
+
 Sources: official guide v1.4 (`docs/Bluestaq_NDSU_Straight_Rows_Hackathon_Official.pdf`),
 the starter README and `submissions/README.md` in `Bluestaq/ndsu-hackathon-submissions`,
 and the event site. Nothing here is a method, threshold, or result of ours.
@@ -49,9 +54,9 @@ classes + 15 × mean onset credit. Matching rules are on page 4 of the guide.
 - [ ] JupyterLab is not installed (only needed for the optional starter notebook).
 - [x] `CLAUDE.md` is at the repo root, so Claude Code loads it automatically.
 - [x] GitHub push works; `reno-ogden/straight-rows` is private.
-- Python's `urllib` fails SSL verification on this machine, so `get_data.py` can't download
-  directly. Workaround: download the release zip in a browser or with `curl`, then
-  `python get_data.py --zip PATH` (verifies the published SHA-256).
+- Earlier, Python's `urllib` failed SSL verification on this machine. A later clean-copy run and the
+  independent review's clean-archive run downloaded the release successfully with TLS verification on;
+  `--zip PATH` remains the checksum-verified fallback if direct download fails.
 
 ## Dataset (released at kickoff)
 
@@ -60,12 +65,14 @@ classes + 15 × mean onset credit. Matching rules are on page 4 of the guide.
 - [x] Telemetry header matches the documented columns.
 - [x] `data/labels/train_episodes.json` has 12 development episodes.
       Note: labels use `recommended_action`; submissions use `action`.
-- [ ] Data-quality pass: UTC parsing, missing values, duplicate timestamps, gaps, tractor IDs.
+- [x] Data-quality pass: UTC parsing, nulls, duplicate tractor/timestamps, gaps, and tractor IDs checked
+      on the released data. The loader now rejects malformed required fields and duplicate tractor-seconds.
 
 ## Before submitting
 
-- [ ] Fresh clone + README commands regenerate the identical `submission.json`.
-- [ ] Real handle and repo URL in the file; validator `OK`.
+- [x] Earlier fresh clone with pinned-dependency installation reproduced `submission.json`; the independent
+      review also reproduced it from a clean committed archive using the existing project interpreter.
+- [x] Real handle and repo URL in the file; validator `OK`.
 - [ ] Repo made public; fork, add the one file, open the PR with the checklist completed; Submission check green.
 - [ ] All of this before 4:00 pm CT, with margin for a failed check and re-push.
 

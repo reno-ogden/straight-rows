@@ -92,8 +92,10 @@ actions supported by checkable evidence.
 - Validate: `.venv\Scripts\python.exe src\validate_submission.py outputs\submission.json`
 - Development evaluation: `.venv\Scripts\python.exe src\evaluate_dev.py --data data`
 - Dashboard: `.venv\Scripts\python.exe -m streamlit run src\dashboard.py` (then http://localhost:8501)
-- Data: `.venv\Scripts\python.exe scripts\get_data.py --zip C:\path\to\StraightRows_Student_Package.zip`
-  (direct download fails TLS verification on this machine; never disable verification).
+- Data: `.venv\Scripts\python.exe scripts\get_data.py` (direct download succeeded with TLS verification
+  in a later clean copy); if certificate validation fails, use
+  `.venv\Scripts\python.exe scripts\get_data.py --zip C:\path\to\StraightRows_Student_Package.zip`.
+  Both paths verify the published checksum; never disable certificate verification.
 
 ## Rules that must hold
 

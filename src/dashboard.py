@@ -472,12 +472,15 @@ def overlays(a, b, s0, e0, cursor):
     under, over = [], []
     if s0 is not None:
         band = pd.DataFrame({"ts": [max(s0, a)], "end": [min(e0, b)]})
-        under.append(alt.Chart(band).mark_rect(color=BLUE, opacity=0.08).encode(x=x_enc(a, b), x2="end:T"))
+        under.append(alt.Chart(band).mark_rect(color=BLUE, opacity=0.08).encode(
+            x=x_enc(a, b), x2="end:T", tooltip=alt.value(None)))
         edges = pd.DataFrame({"ts": [t for t in (s0, e0) if a <= t <= b]})
         if len(edges):
-            under.append(alt.Chart(edges).mark_rule(color=BLUE, strokeDash=[5, 3], strokeWidth=1.2).encode(x=x_enc(a, b)))
+            under.append(alt.Chart(edges).mark_rule(color=BLUE, strokeDash=[5, 3], strokeWidth=1.2).encode(
+                x=x_enc(a, b), tooltip=alt.value(None)))
     if cursor is not None:
-        over.append(alt.Chart(pd.DataFrame({"ts": [cursor]})).mark_rule(color=INK, strokeWidth=1.5).encode(x=x_enc(a, b)))
+        over.append(alt.Chart(pd.DataFrame({"ts": [cursor]})).mark_rule(color=INK, strokeWidth=1.5).encode(
+            x=x_enc(a, b), tooltip=alt.value(None)))
     return under, over
 
 
@@ -912,7 +915,8 @@ def methodology_md():
 - **Gap bridging:** same-tractor, same-cause gaps ≤ {cfg.bridge_gap_s:g} s are joined before the
   {cfg.min_duration_s:g} s minimum-duration filter; same-cause detections on different tractors that start within
   {cfg.merge_gap_s:g} s of a previous end are merged (this can overstate the affected set).
-- **Multipath is not detected.**
+- **Multipath detection is off in this dashboard and submission.** An opt-in detector exists for analysis,
+  but it produces hundreds of short reports and is not used here.
 - **Confidence is a fixed heuristic value ({CONFIDENCE})** for every detection. It is not calibrated and is not
   a probability.
 - **Development results are in-sample:** parameters were chosen on the same 12 labeled episodes. The evaluation

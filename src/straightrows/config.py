@@ -2,6 +2,7 @@
 or chosen on the labeled development window (2026-05-04..06). See docs/pipeline.md.
 """
 from dataclasses import dataclass
+import math
 
 import pandas as pd
 
@@ -55,6 +56,21 @@ class Config:
     mp_join_s: float = 4.0           # join qualifying seconds separated by at most this (recoveries, gaps)
     mp_min_s: float = 8.0            # shortest dip reported (shorter = normal fluctuation)
     mp_max_s: float = 60.0           # longest dip reported (longer lows belong to other causes)
+
+    def __post_init__(self):
+        positive = ("cn0_low_dbhz", "xte_high_m", "moving_mps", "dropout_dbhz",
+                    "min_duration_s", "mp_drop_db", "mp_window_s", "mp_min_s")
+        nonnegative = ("merge_gap_s", "bridge_gap_s", "mp_mean_tol_db", "mp_join_s")
+        for name in positive + nonnegative + ("link_low_frac", "s4_storm", "mp_max_s"):
+            value = getattr(self, name)
+            if not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError(f"{name} must be a finite number")
+            if (name in positive and value <= 0) or (name in nonnegative and value < 0):
+                raise ValueError(f"{name} is outside its valid range")
+        if not (0 < self.link_low_frac <= 1 and 0 < self.s4_storm <= 1):
+            raise ValueError("link_low_frac and s4_storm must be in (0, 1]")
+        if self.mp_max_s < self.mp_min_s:
+            raise ValueError("mp_max_s must be at least mp_min_s")
 
 
 # Historical baseline: reproduces src/baseline.py exactly (no working gate except on XTE).

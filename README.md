@@ -40,9 +40,10 @@ Python version, an offline install.
 `sda\constellation_advisories.json`, `sda\rfi_reports.json`) and development labels for May 4–5
 (`labels\train_episodes.json`). No real farm, receiver or space-weather measurements are involved.
 
-**How labels are used.** Only the 12 development episodes have labels. The detection code
-(`src\straightrows\`) never reads them; they are read only by `src\evaluate_dev.py`, `tests\test_pipeline.py`
-and the dashboard's separate "Development labels" section, to score and inspect development output. Parameters
+**How labels are used.** Only the 12 development episodes have labels. `straightrows.io.load` reads the labels
+file when it is present, but no detection, attribution, assembly or evidence step uses it; only
+`src\evaluate_dev.py` (scoring) and the dashboard's separate "Development labels" section use the labels, to score
+and inspect development output. Parameters
 were chosen on these labels, so development scores are in-sample. The evaluation day (May 6) has no public
 labels.
 
@@ -106,14 +107,14 @@ No step calls an LLM or any online API at analysis time.
 ```
 
 **Check that the dataset tests actually ran.** With `data\` present the expected test result is
-`33 passed` (3 dataset tests + 30 synthetic tests). Without `data\`, pytest still exits successfully but reports
-`30 passed, 3 skipped` with the reason `dataset not downloaded`: that is **not** a successful analysis run.
+`41 passed` (3 dataset tests + 38 synthetic tests). Without `data\`, pytest still exits successfully but reports
+`38 passed, 3 skipped` with the reason `dataset not downloaded`: that is **not** a successful analysis run.
 `run_pipeline.py` and `evaluate_dev.py` stop with `Dataset not found …` and write nothing if `data\` is missing.
 
 `src\validate_submission.py` is the official validator (`starter/submission/validate_submission.py`), identical
 apart from line endings (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-Clean-copy results (2026-11-14): `33 passed`; `Wrote 7 detections`; both the repository copy and a freshly
+Earlier clean-copy results (2026-11-14, before the input-validation tests): `33 passed`; `Wrote 7 detections`; both the repository copy and a freshly
 downloaded official validator print `OK: 7 detection(s)`; the output was byte-identical to the development
 copy's `outputs\submission.json` and to a second run; `evaluate_dev.py` reproduced the table under
 *Development results*; both optional analysis scripts ran (12 plots); the dashboard loaded headlessly
@@ -298,6 +299,10 @@ baseline; window boundaries clip; repeated dips are each reported once with recu
 stay separate per tractor; a concurrent equipment fault is unchanged and kept as its own cause; the detector is
 off by default and in `STARTER`.
 
+`tests/test_input_validation.py` has eight focused checks: empty optional RFI/advisory feeds load;
+conflicting duplicate tractor-seconds, null required telemetry, empty required Kp, and invalid configuration
+values fail with clear errors. Missing sample timestamps remain allowed; the documented gap rules apply.
+
 The tests do **not** establish that detections are correct, check the development score, check
 that evidence numbers are right, or exercise the command-line scripts.
 
@@ -313,8 +318,9 @@ that evidence numbers are right, or exercise the command-line scripts.
   ~640 px, so between that and ~1100 px the report's two columns get narrow. Screen-reader, keyboard-only
   timeline use, touch, zoom and colour-vision checks have not been done. A replay button pressed while the page
   is still re-running may be dropped.
-  `straightrows.io.load` fails if the RFI or advisory feed is an empty list (`KeyError: 'ts'`); the
-  dashboard then shows that error rather than a page.
+- **Input validation:** the loader rejects null required fields, duplicate tractor-seconds, unexpected tractor
+  IDs, and empty required SDA series. Empty optional RFI/advisory feeds load. It does not require continuous
+  1 Hz sampling; missing minutes can be bridged by the detector's existing gap rule.
 - **Working state** = 1-minute mean speed above 1.0 m/s. Speed is only ever 0 or 4.5 m/s, so that means
   at least 14 moving seconds in the minute. All causes require the attributed tractor to be working.
   A stop of at most 180 s inside one incident is bridged and therefore included in the interval.

@@ -1,6 +1,8 @@
 # Dataset: download at kickoff (see README); never commit it
 data/
 *.zip
+# Generated submissions, plots, backups, and local demo/review artifacts
+outputs/
 # Python
 .venv/
 __pycache__/

@@ -1,4 +1,104 @@
-# Handoff — Straight Rows (written 2026-11-14 02:20 CST; readiness update 2026-11-14 08:25 UTC)
+# Handoff — Straight Rows
+
+## Current state — 2026-11-14 12:01 CST / 18:01 UTC
+
+**Read this section first; dated sections below are history and may describe older branches, counts, or bugs.**
+The deadline is **16:00 CST / 22:00 UTC today**; target a successful submission by **15:00 CST / 21:00 UTC**.
+The fleet-overview → incident-report dashboard design is approved. See [CODEX_REVIEW.md](CODEX_REVIEW.md)
+for change ownership, exact verification scope, independent detection traces, and open issues.
+
+- **Git:** branch `feat/blue-investigation-workspace`, full committed HEAD
+  `c2c342c3b1245968de4fd15b6f5e7bfc473f6cd7`; no staged files. Modified, uncommitted:
+  `.gitignore`, `README.md`, `docs/HANDOFF.md`, `docs/pipeline.md`, `docs/preflight.md`,
+  `src/dashboard.py`, `src/straightrows/config.py`, `src/straightrows/io.py`.
+  Untracked: `docs/DEMO.md`, `tests/test_input_validation.py`; this handoff also creates untracked
+  `docs/CODEX_REVIEW.md` and modifies `CLAUDE.md` to correct a durable download instruction.
+  `outputs/` is ignored and contains the preserved submission, backups, and review artifacts.
+  Local `origin/main` points to the same commit as HEAD; local `main` is seven commits behind that ref.
+  No network fetch or push was performed in this handoff: current remote synchronization is **not verified**.
+- **Pipeline:** default causes are `SPACE_WEATHER`, `JAMMING`, `SPOOFING`, `EQUIPMENT_FAULT`.
+  Suspected `MULTIPATH` exists as an opt-in 1 Hz detector, **off** in the dashboard and submission.
+  Per-tractor 1-minute mean speed >1.0 m/s defines working (at least 14 moving seconds with this dataset).
+  Same-tractor/same-cause gaps ≤180 s bridge before the 180 s minimum; same-cause tractor runs merge
+  within 300 s. Different causes remain separate. Confidence is a fixed heuristic **0.5**, not a probability.
+  S4/Kp are backward-as-of aligned with no staleness bound; RFI is evidence context, not a rule input.
+  RFI observation versus report time and SDA interval timestamp meaning are undocumented. Cross-track error
+  is a separate guidance-monitor channel; reported GNSS lat/lon is not ground truth.
+- **Known limitations:** development TRN-05 jamming and TRN-08 spoofing inside a storm are missed; the
+  six-minute spoofing tail after the storm is the one development scorer false positive. Default misses both
+  labeled multipath episodes. Same-cause cross-tractor merging can overstate the affected set. Development
+  scores are in-sample; evaluation accuracy is unknown.
+- **Verified on the current code state:** `.venv\Scripts\python.exe -m pytest -q -rs -p no:cacheprovider tests`
+  → **41 passed**; `src\validate_submission.py outputs\submission.json` → `OK: 7 detection(s)`.
+  `outputs\submission.json` SHA-256 is
+  `27ED40C569210563D25A1219D7713F6E4173BAFCE469E23BED12D66D6260CCB6`.
+  A unique regeneration after the input changes, `outputs/approved-robustness-20261114T174352550Z/submission.json`,
+  has the same SHA-256. Later edits affected only display and documentation, so regeneration is not required
+  by an analytical change; do not replace the designated file silently. Schema validation does not prove
+  analytical accuracy. Full procedure and limits: [CODEX_REVIEW.md](CODEX_REVIEW.md).
+- **Dashboard:** from the repository root in Windows CMD run
+  `.venv\Scripts\python.exe -m streamlit run src\dashboard.py`, then open `http://localhost:8501`.
+  Uses the same pipeline output, with cached visualization. The latest tooltip fix was checked in live
+  headless Edge at 1366×768; accessibility and zoom remain untested.
+- **Submission readiness:** no final commit, current remote visibility, fork, PR, or green live Submission
+  check has been verified. Earlier offline PR-check simulation reported a private-repository blocker; do
+  not treat it as a current remote status check. Before publication, decide whether the Git author email
+  in history and the tracked official guide PDF are acceptable for a public solution repository.
+  Committing, pushing, changing visibility, forking, opening a PR, and submitting each require the user's
+  explicit authorization. The official fork PR must change exactly
+  `submissions/reno-ogden/submission.json` and pass its Submission check before lock.
+
+**Next three tasks:** (1) User decides public-repository history/PDF exposure and authorizes publication
+steps (about 10–20 min to inspect/decide); (2) with authorization, make a focused solution-repo commit,
+verify the remote public state and push/merge the reviewed branch (about 15–30 min; accept only if code,
+docs, demo, and chosen JSON agree); (3) with authorization, create the official fork's one-file PR and
+confirm a green Submission check by 21:00 UTC (about 20–40 min, allow time for failures).
+Do not reopen the dashboard design, enable multipath, retune on unlabeled evaluation, or overwrite
+`outputs/submission.json` as part of this handoff.
+
+## Approved independent-review fixes — 2026-11-14 ~17:49 UTC (milestone record)
+
+The working branch is `feat/blue-investigation-workspace` at committed HEAD `c2c342c`. These fixes are
+uncommitted. Preserve the pre-existing README label-use edit, `docs/DEMO.md`, and all `outputs/` files;
+no existing result was replaced. No detector threshold, attribution rule, interval assembly rule,
+raw challenge file, or intended `outputs/submission.json` was changed.
+
+1. **Correctness/presentation claim:** `docs/DEMO.md` now says RFI-001 is *timestamped* 15 minutes after
+   onset, not that its report arrived then. The feed does not document whether `ts` is observation or
+   arrival time. The space-weather line now describes what the rule attributes rather than proving a
+   physical alternative impossible. `.gitignore` now ignores `outputs/`, as the README says they are local;
+   it prevents the generated review files and backups from being included by a broad stage. No analytical
+   or UI code changed in this milestone.
+2. **Input robustness:** `io.load` now rejects missing/null required telemetry, duplicate tractor-seconds,
+   unexpected IDs, and empty, missing-column, null, or duplicate-timestamp Kp/Dst/S4. Empty optional RFI/advisory feeds load.
+   `Config` rejects invalid numeric thresholds/durations. Missing sample timestamps are still allowed;
+   the existing gap behavior remains. Eight new focused tests passed; the full suite was **41 passed**
+   with the released data. Regeneration to
+   `outputs/approved-robustness-20261114T174352550Z/submission.json` wrote 7 detections, passed the
+   official-identical local validator, and was byte-identical to preserved `outputs/submission.json`
+   (SHA-256 `27ed40c5…60ccb6`). `evaluate_dev.py` after this code change reproduced the prior table:
+   default 27.29/40, macro-F1 0.693, onset 0.664, 8/12 correct, 1 FP; STARTER equivalence identical on
+   both windows. The nine development detections, including evidence, had the same sorted-JSON SHA-256
+   (`c39806ce…340fb1e6fa1`) as the independent clean archive of committed HEAD. These checks apply to the
+   loader/config changes before the later display-only edits.
+   A separate current-source copy without data (`outputs/no-data-check-20261114T175255054Z/`) produced
+   **38 passed, 3 skipped** with explicit dataset-skip reasons; `run_pipeline.py` exited 1 with
+   "Dataset not found" and wrote no output.
+3. **Dashboard and documentation:** chart overlays now suppress their automatic tooltip, which previously
+   showed a wrong end date. In live headless Edge at 1366×768, the shaded-band hover had no tooltip,
+   a data line still showed tractor/UTC bin/value, +10 s advanced replay, and Back returned to fleet.
+   The stable report had no horizontal overflow. `README.md`, `docs/pipeline.md`, `docs/preflight.md`,
+   and the dashboard methodology now state the current test count, input behavior, multipath status,
+   and in-sample limits. These edits do not change analytical output. Review screenshot:
+   `outputs/approved-tooltip-stable-20261114T1745Z.png`.
+4. **Optional analytical enhancement:** none approved or made. Multipath stays opt-in and off in the
+   submission; storm-relative rules and confidence calibration remain deferred.
+
+**Still required before submission:** decide whether the existing non-`noreply` author email in Git
+history is acceptable in a public repository; explicitly select final files for the solution-repo
+commit (avoid adding all of `outputs/`); make that repo public; fork the official repository; add
+only `submissions/reno-ogden/submission.json` to one PR; confirm the Submission check passes before
+22:00 UTC, preferably by the 21:00 UTC target. No commit, push, visibility change, fork, or PR was made here.
 
 ## Readiness verification — 2026-11-14 08:25 UTC (supersedes older state where they differ)
 
@@ -311,11 +411,12 @@ screen-reader/touch/zoom/colour-vision checks of the dashboard.
 
 ## Known issues
 
-- **Multipath is not detected** (macro-F1 capped at 0.8; dev TRN-11/12 missed).
+- **Multipath is off in the default submission** (dev TRN-11/12 missed); an opt-in detector exists.
 - Confidence is a fixed 0.5 (not calibrated).
 - Jamming and spoofing during a storm are missed (dev TRN-05, TRN-08); one dev FP: 05-05 22:00 spoofing fragment.
 - Same-cause merge across tractors (within 5 min) can overstate affected tractors.
-- `straightrows.io.load` raises `KeyError: 'ts'` if the RFI or advisory feed is an empty list (real data unaffected).
+- Empty RFI/advisory feeds now load; required feeds, null values, and duplicate tractor-seconds are checked
+  (see the current-state review section at the top).
 - SDA/RFI timestamp semantics undocumented (interval start vs end; RFI observation vs report time).
 - Starter notebook in the official repo still says "hour 22"; current official sources say hour 24 (4 pm CT).
 - Git author email on all commits is a personal address; it becomes public when the repo is made public
@@ -355,7 +456,7 @@ interpretation, action, uncertainty); exact submission evidence in an expander. 
    *Accept:* synthetic tests for dip/no-dip and recurrence; dev MULTIPATH F1 > 0 with no regression in other
    classes (official scorer); evaluation output change reported as counts only; `STARTER` equivalence still
    IDENTICAL; README/docs updated.
-3. **Loader robustness** (`io.load` handles empty RFI/advisory feeds; assert no duplicate (tractor, ts),
+3. **Loader robustness — completed in the current-state review section** (`io.load` handles empty RFI/advisory feeds; assert no duplicate (tractor, ts),
    no NaN in required columns, known tractor IDs).
    *Accept:* new synthetic tests pass (empty feeds load; bad data raises a clear error); real-data outputs
    byte-identical; all existing tests pass.

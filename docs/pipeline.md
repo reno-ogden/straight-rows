@@ -95,7 +95,22 @@ A higher score is consistent with the fix but does not prove it; the synthetic t
 working tractors). This was counted after the change, not used to choose it.
 
 Caveat: parameters were chosen and scored on the same 12 episodes (no held-out split), so this is
-an in-sample comparison. The flat 120–360 s plateau is the main argument that it generalises.
+an in-sample comparison. The flat 120–360 s plateau shows local insensitivity on those examples;
+it does not establish performance on new episodes.
+
+## Input validation review — 2026-11-14 (after the final detection design)
+
+`io.load` now rejects missing or null required telemetry fields, duplicate `(tractor_id, ts)` records,
+unexpected tractor IDs, and empty, missing-column, null, or duplicate-timestamp Kp/Dst/S4 series. Conflicting duplicate rows can
+silently change a minute mean and suppress a detection, so rejecting them protects the rule's meaning.
+Empty optional RFI and advisory lists load as empty timestamped tables. `Config` rejects non-finite or
+out-of-range thresholds and duration settings. Missing timestamps remain allowed; the existing minute and
+gap-bridging rules apply. The released dataset has no duplicate tractor-seconds or null telemetry fields.
+
+Eight focused synthetic checks cover these cases. With the released data, the 41-test suite passes and a
+regenerated evaluation submission is byte-identical to the preserved `outputs/submission.json`; the
+development and evaluation detections are unchanged. These checks improve malformed-input behavior, not
+the in-sample score or unknown evaluation accuracy.
 
 ## Evidence accuracy review — 2026-11-14
 
@@ -263,7 +278,8 @@ Dashboard (`src/dashboard.py`), 2026-11-14, on top of `ec107b8`, no analytical s
   1 FP) matches `evaluate_dev.py`.
 - Missing data folder: error naming the missing files plus the data command. Synthetic quiet data: "No
   detections in this window" and custom-interval mode; no labels file: "No labels file in this data folder".
-  Synthetic data with empty RFI/advisory lists: `io.load` raises `KeyError: 'ts'`, shown as an error.
+  At the time, synthetic data with empty RFI/advisory lists raised `KeyError: 'ts'`; the input-validation
+  review above documents the later fix.
 - Network: all 148 page resources came from `localhost:8501`; usage telemetry disabled in `.streamlit/config.toml`.
 - `python -m pytest -q tests`: 15 passed.
 
