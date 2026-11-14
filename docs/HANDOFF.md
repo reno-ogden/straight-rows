@@ -27,6 +27,42 @@
    (copy of `outputs/submission.json`); open one PR to `main` before 22:00 UTC; confirm the Submission check is green.
 3. Any push to the PR after 22:00 UTC makes it late.
 
+## Milestone verification (2026-11-14 ~15:30 UTC) — checkpoint `2e97e47`
+
+Verification only; no code or data changed. Branch `feat/blue-investigation-workspace` @ `2e97e47`, clean tree.
+Checkpoint publication: this section is committed on top of `2e97e47` and fast-forward pushed (no force) to
+`origin/main` on user authorization; "not pushed" notes in the dated sections below describe their own time.
+Confirm with `git log --oneline origin/main -5`.
+`git diff main..HEAD` touches only `src/dashboard.py`, `.streamlit/config.toml`, `README.md`, `docs/HANDOFF.md`
+(nothing under `src/straightrows`, `tests`, `tools`, `scripts`, `run_pipeline.py`, `validate_submission.py`).
+
+| # | Command / check (Windows CMD equivalents; run from repo root with `.venv`) | Result |
+|---|---|---|
+| 1 | `.venv\Scripts\python.exe -m pytest tests -q -rA` (+ `--collect-only -q`) | 15 collected · 15 passed · 0 failed · 0 skipped |
+| 2 | `.venv\Scripts\python.exe src\run_pipeline.py --data data --output outputs\milestone-verify-20261114T152824Z\submission.json --github-handle reno-ogden --repo-url https://github.com/reno-ogden/straight-rows` (folder did not exist) | `Wrote 7 detections`, exit 0 |
+| 3 | Official validator, `starter/submission/validate_submission.py` at official `main` `4b9c010` (re-downloaded; SHA-256 `5a68d949…`, identical to the copy verified earlier) | `OK: 7 detection(s)`, exit 0; repo copy also OK |
+| 4 | Compare with pre-redesign reference `outputs/submission.before-readiness-20261114T082526Z.json` (backed up at `6c2bb1b`) | byte-equal (SHA-256 `5e62e998…e06cc`); parsed-equal; field-by-field: participant, repository_url, 7 detections × {start, end, tractors, class, action, confidence, evidence} — no differences (35 evidence strings) |
+| 5 | Headless harness (scratch `milestone_check.py`): rendered register vs `to_submission(detect(...))` per window; each report's heading, UTC interval, duration, tractors, action text, class/action identifiers, fixed-confidence statement, exported evidence verbatim | all 7 evaluation + 9 development detections match |
+| 6 | Same harness: tractor focus T1/T2/T3/All; every lab view; +10 s = 10 s; slider = cursor label; inspector XTE = raw 1 Hz sample for T1–T3; Next opens next detection and resets cursor to its onset; methodology text on fleet (About) and report (Details); dev scoring button → 27.29 / 0.693 / 0.664 / 1 FP with "In-sample" caption | pass |
+| 6 | Missing input / empty selection: nonexistent folder; folder missing `sda/rfi_reports.json` (scratch copy); zero detections (scratch copy with nominal telemetry); invalid stored selection; forced report view with zero detections | named error, no exception; named missing file; "no detections" message, custom interval works; falls back to #1; falls back to fleet |
+| 7 | Instrumented counts (wrapped `io.load`, `pipeline.detect`, `st.set_page_config`) | 1 script run per interaction (open, +10 s, back; 2 for two window switches); raw data loaded once, 0 reloads during navigation; `detect` called 2× total (one per window, then cached) |
+| — | Browser (in-app pane, 1366×768, live server): open #4 from list, T1 focus, +10 s, Development, back to Evaluation | heading/interval/action/cursor correct; report at top; no horizontal overflow; inspector T1 +0.952 m at 16:35:10 (= full readout); console errors: none |
+
+**Findings.**
+- *Nonblocking:* after switching windows and back, the report and selection are restored, but tractor focus,
+  replay time and the evidence-lab view return to defaults (All tractors, onset, cause default). Cause: Streamlit
+  removes state of widgets not rendered in a run; selection/view use plain session keys and survive. Safe default,
+  not stale. Fix if wanted: mirror these values in non-widget session keys.
+- *Nonblocking:* Vega's automatic screen-reader descriptions of time bars (e.g. timeline "end: May 05, 2026")
+  use the browser's local time zone; visible axes and all tooltips are UTC strings.
+- *Nonblocking (tooling):* in-app pane screenshots of report pages were cropped/zoomed after a DPI change;
+  DOM metrics (visual viewport scale 1, width 1366, zoom 1) confirm the page itself is correct.
+- No blockers found for the dashboard. Submission steps (repo public, fork, PR before 22:00 UTC) remain the user's.
+
+Checkpoint files (tracked, already committed in `2e97e47`): `src/dashboard.py`, `.streamlit/config.toml`,
+`README.md`, `docs/HANDOFF.md`. Untracked evidence (not committed by design): `outputs/milestone-verify-20261114T152824Z/submission.json`,
+`outputs/polish-screenshots-20261114/`, `outputs/report-ui-screenshots-20261114/`.
+
 ## Polish and reliability pass (2026-11-14 ~14:55 UTC)
 
 Committed on local branch `feat/blue-investigation-workspace` on top of `6155945` (not pushed, not merged); only `src/dashboard.py` and this
@@ -77,7 +113,7 @@ names. Settings button lost contrast while open.
 | Regenerate → new `outputs/polish-verify-20261114T145420Z/` | parsed JSON equal to `outputs/submission.before-readiness-20261114T082526Z.json` (and byte-identical) |
 | Repo + official validator (`4b9c010`) | `OK: 7 detection(s)` both |
 | `data/` SHA-256 | unchanged |
-| Headless `AppTest` (scratch) | both windows, all 16 detections from the list with correct "n of N", every lab view, focus, +10 s, Previous/Next disabled exactly at ends and round-trip, Back, custom interval all views, window switch keeps per-window state, missing data → message — no failures |
+| Headless `AppTest` (scratch) | both windows, all 16 detections from the list with correct "n of N", every lab view, focus, +10 s, Previous/Next disabled exactly at ends and round-trip, Back, custom interval all views, window switch keeps per-window selection and view (see milestone note: focus, replay time and lab view reset), missing data → message — no failures |
 | Browser (in-app pane) | list open (incl. last row from a scrolled position → report at top), fleet-timeline click, compact-timeline click, Next, Back (selection retained, "last opened"), dev↔eval from overview and report, focus, two +10 s steps (slider = cursor = inspector), Details, Settings, custom interval; DOM checks at 1920/1366/1024: no overflow, no clipped buttons, no clipped chart titles; console errors: none in the buffer read |
 
 Screenshots: `outputs/polish-screenshots-20261114/` (01 is before the fix; 03–04 predate the final timeline
@@ -113,7 +149,7 @@ empty-detections state with real data (code path exists; no window produces zero
 | `run_pipeline.py` → new `outputs/report-ui-verify-20261114T143021Z/` | byte-identical to `outputs/submission.json` and the readiness backup (SHA-256 `5e62e998…`) |
 | Repo validator + official validator (`4b9c010`) | `OK: 7 detection(s)` both |
 | `data/` SHA-256 before/after | unchanged |
-| Headless `AppTest` (scratch script, not in repo) | both windows; every detection (7 + 9) opened from the list with correct "n of N"; every lab view; focus; +10 s; Next→Previous returns to same report; Back; custom interval with every view; window switch keeps each window's state; missing data folder → message, no exception — no failures |
+| Headless `AppTest` (scratch script, not in repo) | both windows; every detection (7 + 9) opened from the list with correct "n of N"; every lab view; focus; +10 s; Next→Previous returns to same report; Back; custom interval with every view; window switch keeps each window's selection and view (focus/replay/lab view reset — see milestone verification); missing data folder → message, no exception — no failures |
 | Dashboard eval detections == submission | True |
 | Browser (in-app pane), 1366×768 and 1920×1080 | fleet list + timeline; timeline click opens report; Next; Before/after; Position + T1 focus; +10 s; Full readout; development window; custom interval. Fixed during review: header button contrast, cramped lab toolbar and replay buttons, overlapping mini-timeline labels, auto-zoomed C/N0 axis exaggerating ~1 dB changes, EF primary channel. Screenshots: `outputs/report-ui-screenshots-20261114/` |
 
