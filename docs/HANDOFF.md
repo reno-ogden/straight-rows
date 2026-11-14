@@ -49,6 +49,21 @@ for change ownership, exact verification scope, independent detection traces, an
   Git history is **accepted** for publication — no history rewrite; (2) the guide PDF is **removed from the
   tree** (untracked, ignored, local copy kept; earlier commits still contain it; the tracked copy differed
   from the organizers' current published copy). Codex's reviewed work was committed as `5a52954`.
+- **Steps 7–11 reconciliation — 2026-11-14 ~19:25 UTC (Claude), code state `91262e3` (= live `origin/main`):**
+  7 evidence accuracy — complete, still valid (exported evidence unchanged; byte-identical output).
+  8 reproducibility — **re-run on `91262e3`**: fresh clone, new Python 3.11.0 venv, pinned install, `pip check`
+  clean; no data → 38 passed + 3 skipped, pipeline exit 1 with no output; with checksum-verified data (copied from
+  the earlier verified clone, not re-downloaded) → 41 passed; regeneration byte-identical (`27ed40c5…`); official
+  validator OK; `evaluate_dev.py` 27.29 / 0.693 / 0.664 / 8 of 12 / 1 FP, STARTER IDENTICAL; dashboard AppTest OK.
+  Copy kept at `outputs/final-clean-clone-91262e3-20261114T191651Z/submission.json`. README gained a
+  "Current clean-copy results" paragraph. 9 presentation — `docs/DEMO.md` header pinned to `91262e3`; its
+  "fresh clone, 41 tests" claim is now backed. 10 offline fallback — refreshed at `91262e3`:
+  `outputs/demo-fallback-91262e3-20261114T191815Z/` (9 images inspected or pixel-compared with the earlier
+  verified set, viewer rendered with networking blocked). `outputs/demo-fallback-91262e3-20261114T191722Z/` is
+  **invalid** (loading-state image; marked). 11 final verification — complete on `91262e3` (the above plus the live
+  remote/visibility/fork/PR status at 19:01–19:06 and official validator/PR-check/workflow unchanged at `4b9c010`).
+  Not re-run because unchanged: offline PR-check logic and field checks (same file bytes, same official scripts).
+  Uncommitted after this: `README.md`, `docs/DEMO.md`, `docs/HANDOFF.md` (documentation only).
 - **Submission readiness:** no visibility change, fork, PR, or green live Submission check has been made or
   verified. Earlier offline PR-check simulation reported a private-repository blocker; do not treat it as a
   current remote status check.

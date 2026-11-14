@@ -114,6 +114,15 @@ No step calls an LLM or any online API at analysis time.
 `src\validate_submission.py` is the official validator (`starter/submission/validate_submission.py`), identical
 apart from line endings (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
+Current clean-copy results (2026-11-14 ~19:15 UTC, commit `91262e3`): fresh `git clone`, new Python 3.11.0
+venv, `pip install -r requirements.txt`, `pip check` clean; without `data\`: `38 passed, 3 skipped` and
+`run_pipeline.py` stops with `Dataset not found` (exit 1, nothing written); with the checksum-verified dataset:
+`41 passed`; `run_pipeline.py` output byte-identical to the designated `outputs\submission.json`
+(SHA-256 `27ed40c5…60ccb6`); official validator `OK: 7 detection(s)`; `evaluate_dev.py` reproduced the
+*Development results* table; the dashboard loaded headlessly (overview, an evaluation report, development
+window, the TRN-03 report). The dataset in that copy was copied from an earlier clean copy whose direct download
+passed the checksum check, not downloaded again.
+
 Earlier clean-copy results (2026-11-14, before the input-validation tests): `33 passed`; `Wrote 7 detections`; both the repository copy and a freshly
 downloaded official validator print `OK: 7 detection(s)`; the output was byte-identical to the development
 copy's `outputs\submission.json` and to a second run; `evaluate_dev.py` reproduced the table under

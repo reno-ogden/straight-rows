@@ -1,7 +1,10 @@
 # Demo script — Straight Rows / FIELD SIGNAL (5 min + 3 min Q&A)
 
-The detection results below match `outputs\submission.json` (SHA-256 `27ed40c5…`); the current
-working tree includes input-validation and display-only fixes that leave that output unchanged.
+The detection results below match `outputs\submission.json` (SHA-256 `27ed40c5…`) and commit `91262e3`
+(input-validation and display-only fixes on top of the earlier analysis; output unchanged). The "fresh clone,
+41 tests, byte-for-byte" claim in the script was checked on that commit (README → *Current clean-copy results*).
+Offline fallback for this version: open `outputs\demo-fallback-91262e3-20261114T191815Z\index.html`
+(local only; `outputs\` is not in Git). Do not use `outputs\demo-fallback-91262e3-20261114T191722Z` (invalid).
 All development numbers are **in-sample** (parameters were chosen on the same 12 labeled episodes).
 Evaluation-window detections are **unverified predictions** — the evaluation labels are not public.
 
