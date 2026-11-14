@@ -6,31 +6,36 @@ gatherUsageStats = false   # no usage telemetry; the demo needs no network
 headless = true            # do not prompt or auto-open a browser
 address = "localhost"
 
-# "Field Signal" theme: warm ivory paper, charcoal ink, restrained green accent, fine rules.
+# FIELD SIGNAL blue investigation workspace (project palette, not official Bluestaq branding).
+# Background #091321 · panels #122238 (set per panel in dashboard.py) · raised controls #1A304B
+# Primary blue #4C8DFF · cyan #35D0DB · text #EDF4FF · secondary text #A9BCD3 · amber #F5B85A · coral #FF7B86
 [theme]
-base = "light"
-backgroundColor = "#f5f1e6"
-secondaryBackgroundColor = "#ebe5d6"
-textColor = "#23221e"
-primaryColor = "#2e6b4e"
-linkColor = "#2e6b4e"
-borderColor = "#cfc7b4"
+base = "dark"
+backgroundColor = "#091321"
+secondaryBackgroundColor = "#1A304B"
+textColor = "#EDF4FF"
+primaryColor = "#4C8DFF"
+linkColor = "#7FB0FF"
+borderColor = "#2A4566"
 showWidgetBorder = true
-showSidebarBorder = true
-baseRadius = "small"
+baseRadius = "medium"
 font = "sans-serif"
-headingFont = "serif"
+headingFont = "sans-serif"
 codeFont = "monospace"
-codeBackgroundColor = "#ebe5d6"
-codeTextColor = "#23221e"
-dataframeHeaderBackgroundColor = "#ebe5d6"
-dataframeBorderColor = "#cfc7b4"
-greenColor = "#2e6b4e"
-greenBackgroundColor = "#dfe8dd"
-greenTextColor = "#244f3a"
-grayBackgroundColor = "#e4dfd2"
-grayTextColor = "#4a4740"
-orangeBackgroundColor = "#f1e2c8"
-orangeTextColor = "#6b4a12"
-# Tractor colours first (slots 1-3; T2/T3 darkened for >= 3:1 contrast on the ivory background).
-chartCategoricalColors = ["#2a78d6", "#d0581f", "#128a5f", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
+codeBackgroundColor = "#1A304B"
+codeTextColor = "#EDF4FF"
+dataframeHeaderBackgroundColor = "#1A304B"
+dataframeBorderColor = "#2A4566"
+blueColor = "#4C8DFF"
+blueBackgroundColor = "#1A304B"
+blueTextColor = "#9CC1FF"
+grayBackgroundColor = "#1A304B"
+grayTextColor = "#C3D2E4"
+orangeColor = "#F5B85A"
+orangeBackgroundColor = "#3A2F1C"
+orangeTextColor = "#F5C77E"
+redColor = "#FF7B86"
+redBackgroundColor = "#3B1F2A"
+redTextColor = "#FF9EA6"
+# Tractor colours first (T1 blue, T2 amber, T3 cyan); used only for tractor identity.
+chartCategoricalColors = ["#4C8DFF", "#F5B85A", "#35D0DB", "#A98BFF", "#FF7B86", "#E7EEF8", "#9FB3C8", "#7BD88F"]

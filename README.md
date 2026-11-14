@@ -86,38 +86,56 @@ official repository (see *Submission* below).
 .venv\Scripts\python.exe -m streamlit run src\dashboard.py
 ```
 
-Run it from the repository root so `.streamlit\config.toml` is used (ivory "field instrument" theme, no
-usage telemetry, no auto-opened browser, served on localhost only). Then open http://localhost:8501. It needs
-no network access: all page resources are served by the local Streamlit server.
+Run it from the repository root so `.streamlit\config.toml` is used (dark blue workspace theme, no
+usage telemetry, no auto-opened browser, served on localhost only). Then open http://localhost:8501 (if that
+port is busy, add `--server.port 8502`). It needs no network access: all page resources, including the
+reported-position plot, are served by the local Streamlit server; no map tiles are used.
 
 **Data source.** The dashboard calls the pipeline itself: `straightrows.io.load`, `pipeline.detect`,
 `export.to_submission` (so detections, actions, confidence and evidence are exactly what goes into
 `submission.json`), `features.minute_features` + `candidates.flag` for the working flag, and
-`evidence._stats` for the measurement table (the same function that writes the exported evidence numbers).
+`evidence._stats` for the measurement tables (the same function that writes the exported evidence numbers).
 It has no detector of its own and does not use `devdata.py`. Results are cached per data folder (keyed by
 file size and modification time), window and `Config` values, so changing inputs or configuration recomputes.
 
-**Layout (one incident at a time).**
+**Layout (bounded panels, one selected detection at a time).**
 
-- *Header and sidebar:* window choice (development or evaluation, UTC bounds shown). Data folder and display
-  aggregation sit under *Advanced settings*. The status line states whether scores are in-sample
-  (development) or not measured (evaluation).
-- *Fleet incident ribbon:* T1/T2/T3 lanes across the window; each pipeline detection is a bar with a cause
-  colour and a text code (SW, JAM, SPF, EF). Concurrent causes on one tractor sit in separate sub-rows.
-  Click a bar, or use the *Incident* selector next to it. The full table is under *Detection register*.
-- *Selected incident:* plain-language heading, full UTC interval, "pipeline attribution, not confirmed
-  truth", and the operator action in words. Exact identifiers are under *Identifiers*.
-- *Evidence (left):* incident lane (selected bar solid, adjacent incidents faded), a working-state strip only
-  when the state changes (otherwise one line of text), and up to three primary channels chosen for the
-  attributed cause (display only; see below). Every channel is under *Inspect all signals*; the exact
-  submission evidence is under *Exact evidence exported to submission*.
-- *Decision brief (right):* observed measurements (incident tractors vs. others vs. the same tractors' prior
-  30 working minutes), the SDA and RFI lines from the evidence, the pipeline's attribution line(s), the
-  recommended action, and uncertainty (fixed confidence 0.5, the rule that fired with its configured values,
-  and known gaps).
-- *Fleet comparison* and *Methodology and limitations* tabs: per-tractor statistics, the reported-GNSS-position
-  view (not ground truth), methodology, display choices, aggregation and provenance (window, data folder,
-  git commit, every `Config` value).
+- *Header:* FIELD SIGNAL, the window toggle (evaluation or development, UTC bounds), and short labels
+  (simulation data, retrospective, in-sample vs. not measured). *Settings* holds the data folder and chart
+  aggregation.
+- *Fleet overview:* T1/T2/T3 lanes across the window; each pipeline detection is a bar with a cause colour and
+  a text code (SW, JAM, SPF, EF); concurrent causes on one tractor sit in separate sub-rows. Click a bar, or
+  use the selector beneath it (keyboard-accessible fallback). The selected detection is outlined and its time
+  span shaded. *Detection register* lists all detections. *Custom interval* inspects any period instead.
+- *Incident summary:* "Pipeline attribution · suspected, not confirmed", plain-language cause, tractors, UTC
+  interval, operator action, and confidence 0.5 (fixed, not calibrated).
+- *Evidence (wide, left):* context before/after, tractor focus (All tractors / T1 / T2 / T3: dims the others,
+  never hides them), and the replay slider. Charts: a strip of overlapping detections (selected outlined,
+  adjacent faded) plus the pipeline's per-minute working state, one tall primary chart and two supporting
+  charts chosen for the attributed cause (display only), all on the same UTC axis with the detection shaded
+  and a replay cursor. *Inspect all signals* and *SDA reports in this interval* are expandable.
+- *Decision (narrow, right):* recommended action, up to three measured observations for the cause's primary
+  channels (detection vs. prior 30 working minutes vs. other tractors), and the main uncertainty. *Full
+  measurements*, *Rule and uncertainty details*, *Exact evidence exported to submission* and *Identifiers*
+  expand.
+- *Replay readout:* for the cursor second, the raw 1 Hz sample of each tractor (speed, working flag of that
+  minute, signed cross-track error, mean/min C/N0, satellites, fix state, RTK link) and episode-level
+  detection membership, plus the S4 and Kp values in force with their publication time. Only an exact
+  timestamp match is shown (tolerance 0 s; the telemetry is 1 Hz without gaps); otherwise *no sample*.
+- *Before · during · after:* the same `evidence._stats` over 30 working minutes before onset (the evidence
+  baseline), the detection itself, and 30 working minutes after the end (display-only mirror of the
+  baseline). Empty windows show *unavailable*; other detections overlapping these windows are named.
+- *Reported GNSS position:* "may be misleading during spoofing". 10 s mean reported positions in metres from
+  the interval's mean position (flat-earth conversion), equal scale on both axes, trails broken at gaps,
+  bright up to the cursor, and 1 Hz markers at the cursor. Retrospective playback of reported positions, not
+  verified motion; no field boundary, intended row or true location is drawn.
+- *Fleet comparison* and *Methodology and provenance* tabs: per-tractor statistics, methodology, display
+  choices and definitions, and provenance (window, data folder, git commit, every `Config` value).
+
+**Using it (one minute).** Click a bar in the fleet ribbon (or pick it in the selector). Read the summary
+and the decision panel. Drag the replay slider or press *−1 min / −10 s / +10 s / +1 min / Onset*; the cursor
+moves on every chart and on the position plot, and the readout shows each tractor's sample at that second.
+Pick a tractor under *Tractor focus* to emphasise it everywhere.
 
 **Primary channels (display only; detection is unaffected).** Space weather: mean C/N0, regional S4,
 RTK_FIXED. Jamming: mean C/N0, satellites, cross-track error. Spoofing: cross-track error, mean C/N0,
@@ -129,8 +147,10 @@ is never primary for equipment fault: the rule does not use it, and a concurrent
 dB-Hz (mean C/N0: bin mean; min C/N0: bin minimum); satellites: bin median; RTK link up and RTK_FIXED: % of
 samples; S4 (15-min values) and Kp (3-hour values) drawn as the latest published value. Bins: 1 min (equal to
 the pipeline's features for the shared channels), 10 s, or 1 s for intervals of at most 30 minutes. Lines
-break at missing bins and never join different tractors. Tractor colours are fixed on every chart (T1 blue,
-T2 orange, T3 green); lines for tractors outside the selected incident are dashed.
+break at missing bins and never join different tractors; no smoothing. Tractor colours are fixed everywhere
+(T1 blue, T2 amber, T3 cyan, with text labels and marker shapes); cause colours use a separate hue set (violet,
+coral, magenta, slate) and always carry a text code. Lines for tractors outside the selected detection are
+dashed.
 
 **Development labels** (development window only) are in a separate, labelled section, never mixed with
 detections. A button scores the detections against them with the official scorer (in-sample).
@@ -207,10 +227,9 @@ that evidence numbers are right, or exercise the command-line scripts.
 
 - **Multipath is not detected.** No `MULTIPATH` detections are produced.
 - **Confidence is fixed at 0.5** for every detection. It is not calibrated and is not a probability.
-- **Dashboard limitations:** chart widths are fixed (evidence ~490 px, ribbon ~790 px) and do not stretch on
-  wide screens; very narrow windows scroll sideways. The reported-position plot does not use equal x/y scales.
-  "Parked" bars in the working strip are deliberately faint (1.98:1 on the background); state is also shown
-  by bar thickness and in the tooltip.
+- **Dashboard limitations:** no play/pause animation (manual replay only). The position plot is a fixed
+  330 px square. Very narrow windows stack the panels. Screen-reader, touch, zoom and colour-vision checks
+  have not been done. A replay button press made while the page is still re-running may be dropped.
   `straightrows.io.load` fails if the RFI or advisory feed is an empty list (`KeyError: 'ts'`); the
   dashboard then shows that error rather than a page.
 - **Working state** = 1-minute mean speed above 1.0 m/s. Speed is only ever 0 or 4.5 m/s, so that means

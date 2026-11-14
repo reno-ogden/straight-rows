@@ -1,6 +1,79 @@
-# Handoff — Straight Rows (written 2026-11-14 02:20 CST)
+# Handoff — Straight Rows (written 2026-11-14 02:20 CST; readiness update 2026-11-14 08:25 UTC)
 
-## Repository state
+## Readiness verification — 2026-11-14 08:25 UTC (supersedes older state where they differ)
+
+- Git: branch `main`, HEAD `6c2bb1b` (docs handoff commit on `00f52cd`); local `origin/main` ref = `6c2bb1b`
+  (not re-fetched). No stash, no other branches. Working tree clean apart from untracked `outputs/` and this
+  uncommitted `docs/HANDOFF.md` edit. **No uncommitted dashboard work exists.**
+- Backup: `outputs/submission.before-readiness-20261114T082526Z.json` (SHA-256 `5e62e998…e06cc`, = `outputs/submission.json`).
+- Regenerated into new folder `outputs/readiness-20261114T082526Z/` with the CLAUDE.md submission command
+  (`.venv` Python 3.11.0): `Wrote 7 detections`; **byte-identical** to `outputs/submission.json`.
+- Validators: repo `src/validate_submission.py` and official `starter/submission/validate_submission.py` at
+  official main `4b9c010` (still current at 08:2x UTC; content identical to the repo copy except CRLF line endings)
+  both print `OK: 7 detection(s)` on the regenerated and preserved files.
+- Official `.github/scripts/check_submission_pr.py` `check()` run offline with stubbed GitHub API responses:
+  privacy findings none; with repo simulated **private** → 1 error "solution repository … is not public yet";
+  simulated public → no errors/warnings. Workflow deadline: `SUBMISSION_LOCK_UTC` default `2026-11-14T22:00:00Z`, grace 0.
+- Tests: `pytest -q tests` → 15 passed, 0 skipped.
+- `data/` SHA-256 of all 6 files identical before and after the run; release zip not on this machine, so the
+  comparison to the zip hash in `DATASET_SHA256` was **not** re-run today.
+- Not run: real PR check (needs a PR), fresh clone, clean `pip install`, dashboard re-check.
+
+### Remaining submission steps (all require the user; each needs explicit authorization)
+
+1. Make `reno-ogden/straight-rows` public (the PR check fails while private). Decide first on the personal git
+   author email in history and the tracked guide PDF (see Known issues).
+2. Fork `Bluestaq/ndsu-hackathon-submissions`; add exactly `submissions/reno-ogden/submission.json`
+   (copy of `outputs/submission.json`); open one PR to `main` before 22:00 UTC; confirm the Submission check is green.
+3. Any push to the PR after 22:00 UTC makes it late.
+
+## Dashboard redesign — blue investigation workspace (2026-11-14 ~08:45 UTC)
+
+- Committed on local branch `feat/blue-investigation-workspace` (from `main` @ `6c2bb1b`; not pushed, not
+  merged; `git log --oneline -1` on that branch shows the hash). Changed:
+  `src/dashboard.py` (layout + interactions), `.streamlit/config.toml` (dark blue theme), `README.md`
+  (dashboard section, limitations), this file. No change to `src/straightrows/`, tests, data or schema.
+  Previous dashboard copy (for reference only): commit `6c2bb1b`.
+- Implemented: compact header (window toggle, UTC bounds, settings popover); bounded keyed panels (CSS on
+  `st-key-panel-*` classes only); fleet ribbon with click selection via `on_select` callback + selector
+  fallback sharing ONE session-state key per window; selected detection outlined + span shaded; incident
+  summary band; wide evidence panel (context strip, tall primary chart, two supporting charts, all
+  container-width, shared UTC axis, detection band, replay cursor); narrow decision panel (action, ≤3 measured
+  observations, main uncertainty; details in expanders); manual replay (1 s slider + ±10 s/±1 min/Onset
+  buttons, keyed per detection + context so it resets on change); replay readout (exact-second 1 Hz samples,
+  tolerance 0, "no sample" otherwise; minute working flag; S4/Kp in force with publication age; episode-level
+  membership); tractor focus (dims, never hides); before/during/after table (evidence._stats; "after" is a
+  display-only mirror of the 30-min working baseline); reported-position plot (equal scale, local metres,
+  gap-aware 10 s trails, cursor markers, spoofing caveat).
+- Deferred: play/pause animation; hover-synchronised cursor across charts.
+- Removed: the "Tractors on charts" multiselect (replaced by focus, which keeps comparison context).
+
+### Verification performed (redesign content)
+
+| Check | Result |
+|---|---|
+| `pytest -q tests` | 15 passed |
+| `run_pipeline.py` → new `outputs/redesign-verify-20261114T084243Z/` vs `outputs/submission.json` | byte-identical; validator `OK: 7 detection(s)` |
+| `data/` SHA-256 before/after | unchanged |
+| Headless `AppTest` (scratch script, not in repo): every detection in both windows (7 eval + 9 dev), focus T2, +10 s, custom interval, window switch | no exceptions/errors |
+| Dashboard eval detections == `outputs/submission.json` detections | True (7) |
+| Missing data folder | explicit error message, no exception |
+| Browser (in-app pane) at 1366×768 and 1920×1080 | ribbon click → selector/summary/decision/replay synced; selector → ribbon highlight synced; window switch resets safely; focus; ±10 s / +1 min steps; custom interval; readout with concurrent membership (#1 EF #2 SPF); position plot. Fixed during review: clipped header, working lanes inheriting cause colours, truncated lane label, wrapped readout labels, "13.0"/"1e+1" axis labels. Screenshots: `outputs/redesign-screenshots-20261114/` |
+
+Not checked: screen reader, keyboard-only navigation of the ribbon, touch, browser zoom, colour-vision
+simulation, widths below 1366 px, fresh clone. One of two rapid "+1 min" clicks was not applied in the
+browser (possibly pressed during a rerun); single presses worked.
+
+## Revised priority order (2026-11-14)
+
+1. Submission (user actions above) — deadline 22:00 UTC.
+2. **Dashboard redesign**: implemented and committed on local branch `feat/blue-investigation-workspace`
+   (see section above). Next: user review in the browser; push/merge only on explicit authorization; optional play/pause
+   (must not use blocking loops); accessibility checks.
+3. Multipath detection — **deferred**; needs separate user authorization; not part of the redesign.
+4. Loader robustness (unchanged from below).
+
+## Repository state (as of 02:20 CST)
 
 - Branch `main`, HEAD `00f52cd` ("feat: redesign dashboard as FIELD SIGNAL incident investigation").
 - `origin/main` = `00f52cd` (pushed). Remote: `https://github.com/reno-ogden/straight-rows` (still **private**).
@@ -48,9 +121,10 @@ screen-reader/touch/zoom/colour-vision checks of the dashboard.
 - Git author email on all commits is a personal address; it becomes public when the repo is made public
   (user decision; history rewrite would need explicit approval).
 - Guide PDF is tracked in `docs/`; redistribution permission is not established (user decision).
-- Dashboard: fixed chart widths; position plot not equal-aspect; "parked" bars intentionally faint (1.98:1).
+- Dashboard (redesign): no play/pause; position plot fixed 330 px square; accessibility checks not done
+  (see redesign section). The earlier fixed-width / non-equal-aspect issues are resolved on the redesign branch.
 
-## FIELD SIGNAL direction (agreed, implemented in `00f52cd`)
+## FIELD SIGNAL direction (implemented in `00f52cd`; visual styling superseded 2026-11-14 — see Revised priority order)
 
 Editorial scientific-instrument style: ivory `#f5f1e6`, charcoal `#23221e`, green accent `#2e6b4e`, fine rules,
 serif headings, monospace timestamps; no gradients/glow/gauges/emoji/oversized cards/generated-ID CSS.
@@ -68,7 +142,7 @@ interpretation, action, uncertainty); exact submission evidence in an expander. 
 - Raw `data/`; submission schema (only `participant.github_handle`, optional `display_name`).
 - Dashboard reuse of `straightrows`; labels shown separately from predictions; in-sample wording.
 
-## Next three tasks
+## Next three tasks (02:20 CST list; order superseded by "Revised priority order" above)
 
 1. **Submission readiness (deadline today 16:00 CST / 22:00 UTC).**
    Regenerate into a new folder, back up first, validate, then — only with explicit user authorization at each
