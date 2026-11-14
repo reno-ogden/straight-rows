@@ -10,6 +10,7 @@ labeled episodes it overlaps. Descriptive only: no thresholds, development data 
 """
 import argparse
 import math
+from pathlib import Path
 
 import pandas as pd
 
@@ -83,6 +84,7 @@ def main():
                                     for _, o in overlapping(eps, ep).iterrows())
         rows.append(row)
     df = pd.DataFrame(rows)
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)  # same path, created if missing
     df.to_csv(args.out, index=False, float_format="%.3f")
     print(f"wrote {args.out}")
 

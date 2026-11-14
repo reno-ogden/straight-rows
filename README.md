@@ -1,0 +1,167 @@
+# Straight Rows: degraded-guidance detection and attribution
+
+Solution for the individual Bluestaq × NDSU **Straight Rows Hackathon** (Nov 13–14, 2026).
+It reads 72 h of simulated 1 Hz telemetry from three tractors near Casselton, ND, plus Space Domain
+Awareness feeds, and reports **when guidance degraded, which tractors were affected, the likely cause,
+the recommended action, a confidence value, and evidence computed from the measurements**.
+
+Causes and actions are the official ones: `SPACE_WEATHER` → `HALT_OR_DEGRADED_MODE`,
+`JAMMING` → `HALT_AND_REPORT`, `SPOOFING` → `HALT_CROSSCHECK_AND_REPORT`,
+`EQUIPMENT_FAULT` → `SERVICE_MACHINE_OTHERS_CONTINUE`, `MULTIPATH` → `CONTINUE_FALSE_ALARM`.
+
+## Setup (Windows CMD)
+
+Tested with **Python 3.11.0** on Windows 11. All commands below run from the repository root and
+use the project-local interpreter `.venv\Scripts\python.exe`.
+
+```bat
+:: 1. Create the environment (requires Python 3.11 on PATH or the py launcher)
+py -3.11 -m venv .venv
+
+:: 2. Install the pinned dependencies
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+`requirements.txt` pins the exact versions installed in the tested environment (pandas 3.1.1,
+numpy 2.4.6, matplotlib 3.11.2, pytest 9.2.0, among others). A fresh install from it on a clean
+machine has not been tested. It also pins packages the code does not import yet (for example
+streamlit); they are kept for a possible dashboard.
+
+## Get and verify the data
+
+The dataset is **not** in this repository. It is published by the organizers as
+`StraightRows_Student_Package.zip` on the
+[latest release](https://github.com/Bluestaq/ndsu-hackathon-submissions/releases/latest).
+`scripts\get_data.py` and `DATASET_SHA256` are the official, unmodified starter files
+(see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+
+**Local-zip workflow (tested):** download the zip in a browser, then:
+
+```bat
+.venv\Scripts\python.exe scripts\get_data.py --zip C:\path\to\StraightRows_Student_Package.zip
+```
+
+The script checks the zip's SHA-256 against `DATASET_SHA256`
+(`14bfdf4c…174546`), refuses a mismatch, and extracts only the `data\` folder into `data\`
+(existing files with the same names are replaced). Expected result: `Extracted 6 data files`.
+
+**Direct download** (`.venv\Scripts\python.exe scripts\get_data.py` with no arguments) is the
+official default. On the development machine it failed with
+`SSL: CERTIFICATE_VERIFY_FAILED`, because that Python installation does not trust the certificate
+chain. Use the local-zip workflow in that case. Do **not** disable certificate verification.
+
+## Run
+
+```bat
+:: Tests (need data\; they are skipped if the dataset is missing)
+.venv\Scripts\python.exe -m pytest -q tests
+
+:: Generate the submission file (creates the output folder if needed)
+.venv\Scripts\python.exe src\run_pipeline.py --data data --output outputs\submission.json --github-handle reno-ogden --repo-url https://github.com/reno-ogden/straight-rows
+
+:: Official format validation
+.venv\Scripts\python.exe src\validate_submission.py outputs\submission.json
+
+:: Development evaluation on the 12 labeled episodes (add --sweep for the bridge-gap sweep)
+.venv\Scripts\python.exe src\evaluate_dev.py --data data
+
+:: Optional analysis outputs
+.venv\Scripts\python.exe src\plot_dev_episodes.py --data data --out outputs\dev_plots
+.venv\Scripts\python.exe src\dev_episode_stats.py --data data --out outputs\dev_episode_stats.csv
+```
+
+| Output | Written by | Notes |
+|---|---|---|
+| `outputs\submission.json` | `run_pipeline.py` | Replaced on each run. Deterministic: repeated runs give identical bytes. |
+| `outputs\dev_plots\*.png` | `plot_dev_episodes.py` | One plot per labeled episode. Replaced on each run. |
+| `outputs\dev_episode_stats.csv` | `dev_episode_stats.py` | Per-episode statistics. Replaced on each run. |
+| console | `evaluate_dev.py`, `validate_submission.py`, tests | Nothing written. |
+
+`outputs\` is not committed. The submission file is submitted by copying it into a fork of the
+official repository (see *Submission* below).
+
+## How it works
+
+`src/straightrows/` runs these stages in order (parameters in `config.py`; details in
+[docs/pipeline.md](docs/pipeline.md)):
+
+1. **Load** (`io.py`): raw files read-only; every timestamp parsed as timezone-aware UTC.
+2. **Features** (`features.py`): per-tractor, per-minute mean C/N0, minimum C/N0, mean cross-track error,
+   mean speed and RTK-link-up fraction; the regional S4 and Kp values in force at each minute.
+3. **Candidates** (`candidates.py`): cause-agnostic flags such as low C/N0, high cross-track error,
+   link loss and antenna dropout, plus how many tractors show low C/N0 at once.
+4. **Attribution** (`attribution.py`): one independent test per cause, so a tractor-minute can carry
+   more than one cause.
+5. **Assembly** (`assembly.py`): minute runs → bridge same-cause gaps ≤ 180 s → drop runs < 180 s →
+   merge the same cause across tractors. Different causes are never merged, so concurrent causes stay
+   separate detections.
+6. **Evidence** (`evidence.py`): strings computed from the 1 Hz telemetry and SDA feeds over each
+   detection (affected vs. own prior 30 min vs. other tractors, S4/Kp/Dst, nearby RFI reports,
+   concurrent detections).
+7. **Export** (`export.py`): `submission.json` in the official template's shape.
+
+Inputs and how they are treated:
+
+- **Cross-track error** comes from the separate simulated guidance monitor (per the official
+  guide). It is used as its own input (metres). It is exactly 0 while parked.
+- **Reported GNSS position (lat/lon) is not trusted ground truth.** Detection never uses it. It
+  appears only in evidence, as the approximate distance from an RFI report's centre.
+- `src/baseline.py` is the **official starter baseline modified** to use S4 instead of Kp
+  (commit `b40c92e`). It is kept for comparison; the pipeline's `STARTER` config reproduces it exactly.
+
+## Development results (in-sample)
+
+Scored with the organizers' published scorer (`tools/score_submission.py`, code unchanged) against the
+**12 labeled development episodes** (May 4–5, simulated). The parameters were chosen on these same
+episodes, so these are **in-sample** numbers. They are **not** evaluation-window performance: the
+evaluation labels are not public, and the organizers score once after the lock.
+
+| Variant | Diagnostic /40 | Macro-F1 | Onset credit | Episodes correct | False positives |
+|---|---:|---:|---:|---:|---:|
+| `src/baseline.py` (S4-modified starter) | 21.29 | 0.553 | 0.497 | 7/12 | 3 |
+| Pipeline (default) | 25.04 | 0.653 | 0.580 | 8/12 | 2 |
+
+Still missed on development data: TRN-05 (jamming during the storm), TRN-08 (spoofing during the storm),
+TRN-11/12 (multipath).
+
+## Tests
+
+`tests/test_pipeline.py` has three tests:
+
+1. With the `STARTER` config, the pipeline produces the same intervals, tractors and classes as
+   `src/baseline.py` on both the development and evaluation windows.
+2. Overlapping causes on one tractor (TRN-06 spoofing inside TRN-09 equipment fault, T2) stay
+   separate detections.
+3. The evaluation-window output passes the official validator, and every detection has non-empty
+   evidence.
+
+They do **not** establish that detections are correct, check the development score, test the
+working/parked logic, check that evidence numbers are right, or exercise the command-line scripts.
+Without `data\` they are skipped rather than failed.
+
+## Limitations and known issues
+
+- **Multipath is not detected.** No `MULTIPATH` detections are produced.
+- **Confidence is fixed at 0.5** for every detection. It is not calibrated and is not a probability.
+- **No dashboard exists yet**; analysis is the plotting and statistics scripts above.
+- Space-weather, jamming and equipment-fault tests do not require the tractor to be working. On
+  development data this produces a false positive while parked (05-05 07:00) and a 75-minute-early onset
+  (TRN-01).
+- Jamming is decided from absolute C/N0 plus quiet S4, so jamming during a storm is missed. RFI reports
+  are used only as evidence.
+- Merging the same cause across tractors can overstate which tractors were affected.
+- Whether SDA timestamps mark the start or end of their interval, and whether RFI `ts` is the
+  observation or the report time, is not documented. The pipeline uses the latest value at or
+  before each minute.
+- Evidence times are HH:MM (UTC) without a date.
+
+## Submission
+
+The current official instructions (event site *Submit* page and `submissions/README.md` in the official
+repository) **take precedence over the older PDF guide**. The submission file identifies the participant
+only by `participant.github_handle` (an optional `display_name` is allowed). It must **not** contain an
+email address or student ID. To submit before **Saturday, 14 Nov 2026, 4:00 pm CT (22:00 UTC)**:
+
+1. Make this repository public.
+2. Fork `Bluestaq/ndsu-hackathon-submissions` and add exactly `submissions/reno-ogden/submission.json`.
+3. Open one pull request to `main`, and check that the Submission check passes.

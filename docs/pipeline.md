@@ -21,7 +21,10 @@ python -m pytest -q tests
 | Evidence | `evidence.py` | Strings computed from the 1 Hz telemetry and SDA feeds over each interval. |
 | Export | `export.py` | Template-shaped `submission.json`. |
 
-`Config` in `config.py` holds every parameter; `STARTER` reproduces `src/baseline.py`.
+`Config` in `config.py` holds every parameter. The `STARTER` config reproduces `src/baseline.py`.
+That file is **not** the untouched official starter: it is the official `starter/submission/baseline.py`
+modified in commit `b40c92e` to use regional S4 instead of Kp (`kp >= 5`) to separate space weather from
+jamming. "STARTER" therefore means "our baseline before the pipeline changes", not "the official starter".
 `evaluate_dev.py` and `tests/test_pipeline.py` check that equivalence on both windows.
 
 ## The change, and why
@@ -46,7 +49,7 @@ in two and left a 5-minute fault fragment as a false positive. Thresholds are un
 
 | Variant | Diagnostic /40 | Macro-F1 | Onset | Hits | FP | EF F1 |
 |---|---:|---:|---:|---:|---:|---:|
-| `src/baseline.py` (S4) | 21.29 | 0.553 | 0.497 | 7/12 | 3 | 0.50 |
+| `src/baseline.py` (S4-modified starter) | 21.29 | 0.553 | 0.497 | 7/12 | 3 | 0.50 |
 | Pipeline, `STARTER` | 21.29 | 0.553 | 0.497 | 7/12 | 3 | 0.50 |
 | + multi-label | 22.12 | 0.587 | 0.497 | 7/12 | 2 | 0.67 |
 | + bridge 180 s (default) | **25.04** | **0.653** | **0.580** | **8/12** | **2** | **1.00** |
@@ -56,6 +59,22 @@ Nothing regressed.
 
 Caveat: parameters were chosen and scored on the same 12 episodes (no held-out split), so this is
 an in-sample comparison. The flat 120–360 s plateau is the main argument that it generalises.
+
+## Development history: what was looked at
+
+- Labels were used only from the development window (`data/labels/train_episodes.json`). The
+  pipeline code never reads labels; only `evaluate_dev.py` and the tests do.
+- **Unlabeled evaluation-window feeds were inspected during development.** When the S4 change
+  (commit `b40c92e`) was proposed, the justification was the development-window pattern: Kp drops to
+  3.0 at 15:00 and 21:00 on May 5 while S4 stays at 0.44–0.80 until the labeled storm episodes end.
+  The proposal also pointed out the same Kp/S4 pattern on the evaluation day (Kp 6.8 → 3.0 at 15:00)
+  and that the S4-modified baseline changed the evaluation output (the 15:00–16:00 jamming detection
+  merged into the storm detection). The 0.2 S4 cutoff and the 180 s bridge were chosen and scored on
+  development data only. Evaluation-window outputs were compared only as counts of changed
+  detections, never against any truth. No evaluation labels exist in this repository or were used.
+- The 0.2 S4 cutoff was chosen by hand: below the 0.418 minimum seen inside labeled storm episodes and
+  above the ~0.02–0.08 levels inside quiet labeled episodes. Development S4 also takes values of
+  0.27–0.33, and up to 0.71 outside storm labels, so the split is not clean. Its sensitivity has not been tested.
 
 ## Evaluation-window output (no labels; counts only)
 
@@ -71,3 +90,31 @@ These are not known to be correct.
 - False positives: 05-05 07:00 space weather while parked; 05-05 22:00 spoofing fragment.
 - TRN-01 onset is 75 min early (parked degradation before work starts).
 - Confidence is a constant 0.5 (not calibrated).
+
+## Checks actually run
+
+Verification run, 2026-11-14 at `99acac6`, `.venv\Scripts\python.exe` (Python 3.11.0):
+
+- `python -m pytest -v tests`: 3 passed, 0 failed, 0 skipped.
+- `python src/evaluate_dev.py --data data --sweep`: equivalence IDENTICAL on both windows; numbers as in the table above.
+- `python src/run_pipeline.py … --output outputs/submission.json`: 7 detections; byte-identical to the previous file.
+- `python src/validate_submission.py outputs/submission.json`: `OK: 7 detection(s)`. The validator from the
+  official repository at `4b9c010` gave the same result, and the official pull-request check's offline privacy
+  function reported no findings.
+- `tools/score_submission.py` was confirmed identical to the official scorer apart from the two added comment lines.
+
+Reproducibility milestone run, 2026-11-14, after adding output-folder creation, `scripts/get_data.py`,
+`DATASET_SHA256` and the README (detection code unchanged from `99acac6`):
+
+- `python -m pytest -v tests`: 3 passed.
+- `python src/run_pipeline.py … --output outputs/verify-repro-20261114T070508Z/run/submission.json`
+  (folder did not exist beforehand): created the folder; 7 detections; validator `OK`; byte-identical to the
+  preserved pre-change output.
+- `python src/dev_episode_stats.py … --out outputs/verify-repro-20261114T070508Z/stats/dev_episode_stats.csv`:
+  created the folder; byte-identical to the existing CSV.
+- `python scripts/get_data.py --zip <release zip>`, run in a temporary copy (not over `data/`): checksum accepted,
+  6 files extracted, all byte-identical to `data/`. A non-matching file was refused with "Checksum mismatch".
+- `data/`: all six files unchanged (SHA-256 compared before and after).
+
+The full official pull-request check (needs the GitHub API and a pull request), a fresh-clone
+reproduction, and a clean `pip install -r requirements.txt` have not been run.
