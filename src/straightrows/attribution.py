@@ -12,11 +12,13 @@ from .config import PRIORITY
 
 def tests(f, cfg):
     storm = f.s4 >= cfg.s4_storm
+    # SPOOFING is already gated: xte_high includes `working` (candidates.py).
+    working = f.working if cfg.require_working else True
     return {
-        "SPACE_WEATHER": f.cn0_low & (f.n_cn0_low == 3) & storm,
-        "JAMMING": f.cn0_low & ~storm,
+        "SPACE_WEATHER": f.cn0_low & (f.n_cn0_low == 3) & storm & working,
+        "JAMMING": f.cn0_low & ~storm & working,
         "SPOOFING": f.xte_high & ~f.cn0_low,
-        "EQUIPMENT_FAULT": f.link_low | f.dropout,
+        "EQUIPMENT_FAULT": (f.link_low | f.dropout) & working,
     }
 
 

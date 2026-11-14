@@ -73,12 +73,13 @@ def main():
     variants = {
         "baseline (src/baseline.py)": None,
         "pipeline STARTER (single-label)": STARTER,
-        "pipeline multi-label, no bridge": Config(bridge_gap_s=0.0),
-        "pipeline default (multi + bridge)": Config(),
+        "pipeline multi-label, no bridge": Config(bridge_gap_s=0.0, require_working=False),
+        "pipeline multi + bridge, no gate": Config(require_working=False),
+        "pipeline default (+ working gate)": Config(),
     }
     if a.sweep:
         for g in (60, 120, 180, 240, 300, 360):
-            variants[f"multi-label + bridge {g}s"] = Config(bridge_gap_s=g)
+            variants[f"default, bridge {g}s"] = Config(bridge_gap_s=g)
     print(f"\n{'variant':34} {'diag':>6} {'mF1':>6} {'onset':>6} {'hit':>6} {'FP':>3}   SW   JAM  SPF  EF   MP")
     results = {}
     for name, cfg in variants.items():

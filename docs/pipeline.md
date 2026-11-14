@@ -45,6 +45,33 @@ every value from 120 s to 360 s gives the same 25.04, so the result is not tuned
 if-chain allows one cause per tractor-minute, so TRN-06 (spoofing, T2) cut TRN-09 (equipment fault, T2)
 in two and left a 5-minute fault fragment as a false positive. Thresholds are unchanged.
 
+## Working-state gate
+
+**Definition (unchanged, inherited from the starter):** `working = (1-minute mean of speed_mps) > moving_mps`,
+`moving_mps = 1.0` (`candidates.py`). In this dataset `speed_mps` takes only the values 0 and 4.5, so a minute
+is working when **at least 14 of its 60 samples are moving** (4.5 × 14/60 > 1.0). Observed: every minute in
+the data is either fully parked or fully moving; tractors change state exactly at 03:00Z (park) and
+11:00Z (start work).
+
+**Change:** `SPACE_WEATHER`, `JAMMING` and `EQUIPMENT_FAULT` now also require `working`, as `SPOOFING` already
+did through `xte_high` (`attribution.py`, switch `Config.require_working`, default `True`). Reason: the official
+guide says scored episodes concern working tractors and "poor reception while parked alone is not a scored
+guidance event". No new threshold was introduced. `STARTER` keeps `require_working=False`, so it still
+reproduces `src/baseline.py` exactly.
+
+**Bridging across stops:** gaps are only bridged up to 180 s (same tractor, same cause). Parked minutes never
+start an incident or extend it beyond working minutes. A stop of at most 180 s between two working parts of the
+same incident is joined, so the interval contains that brief stop (pinned by
+`test_short_stop_inside_one_working_episode_is_bridged`). Longer stops, including the nightly 8-hour park,
+are not bridged. This was judged consistent with the intent and left unchanged.
+
+**Synthetic tests** (`tests/test_working_state.py`, 12 tests, no dataset needed): parked-only regional loss,
+loss and link fault create nothing; the same symptoms while working are detected; a parked-then-working
+transition starts at the first working minute (also when work starts mid-minute); working-then-parked ends at
+the last working minute; long stops are not bridged; short stops are; the `STARTER` config still flags
+parked loss. With the gate switched off, the three parked-only scenarios each produce a detection and the
+transition case starts 20 minutes early, so the tests do discriminate.
+
 ## Development-window results (official scorer, 12 labeled episodes)
 
 | Variant | Diagnostic /40 | Macro-F1 | Onset | Hits | FP | EF F1 |
@@ -52,10 +79,19 @@ in two and left a 5-minute fault fragment as a false positive. Thresholds are un
 | `src/baseline.py` (S4-modified starter) | 21.29 | 0.553 | 0.497 | 7/12 | 3 | 0.50 |
 | Pipeline, `STARTER` | 21.29 | 0.553 | 0.497 | 7/12 | 3 | 0.50 |
 | + multi-label | 22.12 | 0.587 | 0.497 | 7/12 | 2 | 0.67 |
-| + bridge 180 s (default) | **25.04** | **0.653** | **0.580** | **8/12** | **2** | **1.00** |
+| + bridge 180 s | 25.04 | 0.653 | 0.580 | 8/12 | 2 | 1.00 |
+| + working gate (default) | **27.29** | **0.693** | **0.664** | **8/12** | **1** | **1.00** |
 
-Per episode: TRN-10 is now detected (onset +0 min, time IoU 1.00), and TRN-09's IoU goes from 0.64 to 1.00.
-Nothing regressed.
+Per episode: the bridge recovered TRN-10 (onset +0 min, time IoU 1.00) and raised TRN-09's IoU from 0.64 to 1.00.
+The working gate changed exactly two detections, both space weather on all three tractors on 05-05:
+the 07:00–07:15 false positive (tractors 100% parked) is gone; the 09:45–16:00 detection now starts at 11:00
+(the moment work starts), so TRN-01 goes from onset −75 min / time IoU 0.80 to onset +0 min / 1.00.
+Space-weather F1 0.80 → 1.00. The other 8 detections, all other episodes and the tractor
+memberships are unchanged. With the gate, the score is flat for bridge 120–360 s; 60 s loses TRN-10 again.
+A higher score is consistent with the fix but does not prove it; the synthetic tests are the direct check.
+
+**Evaluation window:** the gate changes none of the 7 evaluation-window detections (all were already on
+working tractors). This was counted after the change, not used to choose it.
 
 Caveat: parameters were chosen and scored on the same 12 episodes (no held-out split), so this is
 an in-sample comparison. The flat 120–360 s plateau is the main argument that it generalises.
@@ -87,9 +123,10 @@ These are not known to be correct.
 - TRN-05: jamming inside a storm (absolute C/N0 rule plus S4 cannot separate it).
 - TRN-08: spoofing inside a storm.
 - TRN-11/12: multipath (no detector yet).
-- False positives: 05-05 07:00 space weather while parked; 05-05 22:00 spoofing fragment.
-- TRN-01 onset is 75 min early (parked degradation before work starts).
+- False positive: 05-05 22:00–22:06 spoofing fragment (T3).
 - Confidence is a constant 0.5 (not calibrated).
+- The fleet count used by the space-weather test (`n_cn0_low == 3`) still counts parked tractors; only the
+  tractor being attributed must be working. Not changed here.
 
 ## Checks actually run
 
@@ -118,3 +155,13 @@ Reproducibility milestone run, 2026-11-14, after adding output-folder creation, 
 
 The full official pull-request check (needs the GitHub API and a pull request), a fresh-clone
 reproduction, and a clean `pip install -r requirements.txt` have not been run.
+
+Working-state gate run, 2026-11-14 (on top of `c984ee4`):
+
+- `python -m pytest -v tests/test_working_state.py`: 12 passed. With `require_working=False` the parked-only
+  scenarios each produced a detection (checked separately).
+- `python -m pytest -q tests`: 15 passed (12 synthetic + 3 dataset tests).
+- `python src/evaluate_dev.py --data data --sweep`: equivalence IDENTICAL on both windows; default 27.29 /
+  macro-F1 0.693 / onset 0.664 / 8 of 12 correct / 1 FP (before: 25.04 / 0.653 / 0.580 / 8 of 12 / 2).
+- Evaluation-window detections with and without the gate: 7 and 7, none different, so
+  `outputs/submission.json` was not regenerated.

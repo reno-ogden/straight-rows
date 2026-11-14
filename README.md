@@ -119,14 +119,15 @@ evaluation labels are not public, and the organizers score once after the lock.
 | Variant | Diagnostic /40 | Macro-F1 | Onset credit | Episodes correct | False positives |
 |---|---:|---:|---:|---:|---:|
 | `src/baseline.py` (S4-modified starter) | 21.29 | 0.553 | 0.497 | 7/12 | 3 |
-| Pipeline (default) | 25.04 | 0.653 | 0.580 | 8/12 | 2 |
+| Pipeline without the working gate | 25.04 | 0.653 | 0.580 | 8/12 | 2 |
+| Pipeline (default) | 27.29 | 0.693 | 0.664 | 8/12 | 1 |
 
 Still missed on development data: TRN-05 (jamming during the storm), TRN-08 (spoofing during the storm),
-TRN-11/12 (multipath).
+TRN-11/12 (multipath). Remaining false positive: a 6-minute spoofing fragment on T3 at 05-05 22:00.
 
 ## Tests
 
-`tests/test_pipeline.py` has three tests:
+`tests/test_pipeline.py` has three tests that use the challenge data:
 
 1. With the `STARTER` config, the pipeline produces the same intervals, tractors and classes as
    `src/baseline.py` on both the development and evaluation windows.
@@ -135,18 +136,25 @@ TRN-11/12 (multipath).
 3. The evaluation-window output passes the official validator, and every detection has non-empty
    evidence.
 
-They do **not** establish that detections are correct, check the development score, test the
-working/parked logic, check that evidence numbers are right, or exercise the command-line scripts.
-Without `data\` they are skipped rather than failed.
+Without `data\` these three are skipped rather than failed.
+
+`tests/test_working_state.py` has twelve synthetic tests (no dataset needed) for the working-state
+gate: parked-only poor reception creates no space-weather, jamming or equipment-fault detection;
+the same symptoms while working do; detections start and end at working-state transitions; long stops
+are not bridged; a stop of at most 180 s inside one incident is.
+
+The tests do **not** establish that detections are correct, check the development score, check
+that evidence numbers are right, or exercise the command-line scripts.
 
 ## Limitations and known issues
 
 - **Multipath is not detected.** No `MULTIPATH` detections are produced.
 - **Confidence is fixed at 0.5** for every detection. It is not calibrated and is not a probability.
 - **No dashboard exists yet**; analysis is the plotting and statistics scripts above.
-- Space-weather, jamming and equipment-fault tests do not require the tractor to be working. On
-  development data this produces a false positive while parked (05-05 07:00) and a 75-minute-early onset
-  (TRN-01).
+- **Working state** = 1-minute mean speed above 1.0 m/s. Speed is only ever 0 or 4.5 m/s, so that means
+  at least 14 moving seconds in the minute. All causes require the attributed tractor to be working.
+  A stop of at most 180 s inside one incident is bridged and therefore included in the interval.
+  The space-weather fleet count (all three tractors low) still counts parked tractors.
 - Jamming is decided from absolute C/N0 plus quiet S4, so jamming during a storm is missed. RFI reports
   are used only as evidence.
 - Merging the same cause across tractors can overstate which tractors were affected.

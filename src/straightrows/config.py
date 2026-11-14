@@ -39,6 +39,12 @@ class Config:
     # so the starter's 180 s filter discarded every piece. 180 s covers every gap observed
     # in dev (max 3 missing min); the dev score is flat for any value from 120 to 360 s.
     bridge_gap_s: float = 180.0
+    # Require the tractor to be working (the existing `working` flag: 1-min mean speed >
+    # moving_mps) for SPACE_WEATHER, JAMMING and EQUIPMENT_FAULT, as SPOOFING already did via
+    # xte_high. Official guide: scored episodes concern working tractors; poor reception while
+    # parked alone is not a scored guidance event.
+    require_working: bool = True
 
 
-STARTER = Config(multi_label=False, bridge_gap_s=0.0)   # reproduces src/baseline.py exactly
+# Historical baseline: reproduces src/baseline.py exactly (no working gate except on XTE).
+STARTER = Config(multi_label=False, bridge_gap_s=0.0, require_working=False)
