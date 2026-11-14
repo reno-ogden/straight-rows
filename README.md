@@ -80,46 +80,60 @@ chain. Use the local-zip workflow in that case. Do **not** disable certificate v
 `outputs\` is not committed. The submission file is submitted by copying it into a fork of the
 official repository (see *Submission* below).
 
-## Dashboard
+## Dashboard: FIELD SIGNAL
 
 ```bat
 .venv\Scripts\python.exe -m streamlit run src\dashboard.py
 ```
 
-Run it from the repository root so `.streamlit\config.toml` is used (dark theme, no usage telemetry,
-no auto-opened browser, served on localhost only). Then open http://localhost:8501. It needs no network
-access: all page resources are served by the local Streamlit server.
+Run it from the repository root so `.streamlit\config.toml` is used (ivory "field instrument" theme, no
+usage telemetry, no auto-opened browser, served on localhost only). Then open http://localhost:8501. It needs
+no network access: all page resources are served by the local Streamlit server.
 
 **Data source.** The dashboard calls the pipeline itself: `straightrows.io.load`, `pipeline.detect`,
 `export.to_submission` (so detections, actions, confidence and evidence are exactly what goes into
-`submission.json`), and `features.minute_features` + `candidates.flag` for the working flag. It has no
-detector of its own and does not use `devdata.py`. Results are cached per data folder (keyed by file
-size and modification time), window and `Config` values, so changing inputs or configuration recomputes.
+`submission.json`), `features.minute_features` + `candidates.flag` for the working flag, and
+`evidence._stats` for the measurement table (the same function that writes the exported evidence numbers).
+It has no detector of its own and does not use `devdata.py`. Results are cached per data folder (keyed by
+file size and modification time), window and `Config` values, so changing inputs or configuration recomputes.
 
-**What it shows.**
+**Layout (one incident at a time).**
 
-- *Incidents:* pipeline detections for the chosen window (development or evaluation, UTC bounds shown),
-  with start/end in UTC, tractors, cause and operator action. Select one to see its evidence, plain-language
-  cause/action, and confidence ("fixed heuristic value 0.5; not calibrated"). A custom interval can be
-  inspected when there is no detection to select.
-- *Aligned charts* on one UTC time axis: detection lanes; working state (per minute, from the pipeline flag;
-  "working" bars are thicker than "parked", so state is not shown by colour alone); cross-track error (m,
-  signed, bin mean); mean C/N0 (dB-Hz, bin mean); minimum C/N0 (dB-Hz, bin minimum); satellites (bin
-  median); RTK link up (% of samples); RTK_FIXED (% of samples); regional S4 (15-min values) and Kp
-  (3-hour values), each drawn as the latest published value. Display bins: 1 min (identical to the
-  pipeline's features for the shared channels; verified), 10 s, or 1 s for intervals of at most 30 minutes.
-  Lines break at missing bins and never join different tractors. Tractor colours are the same on every
-  chart; tractors outside the selected detection are dashed. RFI reports and advisories in the interval are
-  listed with their timestamps.
-- *Development labels* (development window only) are in a separate, clearly labelled section and lane,
-  never mixed with detections. A button scores the detections against them with the official scorer
-  (in-sample).
-- *Fleet comparison:* per-tractor statistics for the same interval (raw 1 Hz telemetry; working share from
-  the pipeline flag), and an optional plot of **reported GNSS position** (converted to metres around the
-  interval mean with a flat-earth approximation; not ground truth; no guidance line is drawn because the
-  dataset has no reference geometry).
-- *Methodology and limitations,* plus provenance: window, UTC bounds, data folder, git commit, and every
-  `Config` value.
+- *Header and sidebar:* window choice (development or evaluation, UTC bounds shown). Data folder and display
+  aggregation sit under *Advanced settings*. The status line states whether scores are in-sample
+  (development) or not measured (evaluation).
+- *Fleet incident ribbon:* T1/T2/T3 lanes across the window; each pipeline detection is a bar with a cause
+  colour and a text code (SW, JAM, SPF, EF). Concurrent causes on one tractor sit in separate sub-rows.
+  Click a bar, or use the *Incident* selector next to it. The full table is under *Detection register*.
+- *Selected incident:* plain-language heading, full UTC interval, "pipeline attribution, not confirmed
+  truth", and the operator action in words. Exact identifiers are under *Identifiers*.
+- *Evidence (left):* incident lane (selected bar solid, adjacent incidents faded), a working-state strip only
+  when the state changes (otherwise one line of text), and up to three primary channels chosen for the
+  attributed cause (display only; see below). Every channel is under *Inspect all signals*; the exact
+  submission evidence is under *Exact evidence exported to submission*.
+- *Decision brief (right):* observed measurements (incident tractors vs. others vs. the same tractors' prior
+  30 working minutes), the SDA and RFI lines from the evidence, the pipeline's attribution line(s), the
+  recommended action, and uncertainty (fixed confidence 0.5, the rule that fired with its configured values,
+  and known gaps).
+- *Fleet comparison* and *Methodology and limitations* tabs: per-tractor statistics, the reported-GNSS-position
+  view (not ground truth), methodology, display choices, aggregation and provenance (window, data folder,
+  git commit, every `Config` value).
+
+**Primary channels (display only; detection is unaffected).** Space weather: mean C/N0, regional S4,
+RTK_FIXED. Jamming: mean C/N0, satellites, cross-track error. Spoofing: cross-track error, mean C/N0,
+satellites. Equipment fault: chosen with the same test the evidence text uses. Antenna dropouts give min
+C/N0, satellites, mean C/N0; correction-link loss gives RTK link up, RTK_FIXED, min C/N0. Cross-track error
+is never primary for equipment fault: the rule does not use it, and a concurrent spoof can inflate it.
+
+**Units and aggregation.** Cross-track error in metres (guidance-monitor channel, signed, bin mean); C/N0 in
+dB-Hz (mean C/N0: bin mean; min C/N0: bin minimum); satellites: bin median; RTK link up and RTK_FIXED: % of
+samples; S4 (15-min values) and Kp (3-hour values) drawn as the latest published value. Bins: 1 min (equal to
+the pipeline's features for the shared channels), 10 s, or 1 s for intervals of at most 30 minutes. Lines
+break at missing bins and never join different tractors. Tractor colours are fixed on every chart (T1 blue,
+T2 orange, T3 green); lines for tractors outside the selected incident are dashed.
+
+**Development labels** (development window only) are in a separate, labelled section, never mixed with
+detections. A button scores the detections against them with the official scorer (in-sample).
 
 The charts show the inputs behind each detection. They do not independently validate the detector.
 
@@ -193,8 +207,10 @@ that evidence numbers are right, or exercise the command-line scripts.
 
 - **Multipath is not detected.** No `MULTIPATH` detections are produced.
 - **Confidence is fixed at 0.5** for every detection. It is not calibrated and is not a probability.
-- **Dashboard limitations:** chart width is fixed (about 950 px), so very narrow windows scroll sideways;
-  each chart panel repeats its legend; the reported-position plot does not use equal x/y scales.
+- **Dashboard limitations:** chart widths are fixed (evidence ~490 px, ribbon ~790 px) and do not stretch on
+  wide screens; very narrow windows scroll sideways. The reported-position plot does not use equal x/y scales.
+  "Parked" bars in the working strip are deliberately faint (1.98:1 on the background); state is also shown
+  by bar thickness and in the tooltip.
   `straightrows.io.load` fails if the RFI or advisory feed is an empty list (`KeyError: 'ts'`); the
   dashboard then shows that error rather than a page.
 - **Working state** = 1-minute mean speed above 1.0 m/s. Speed is only ever 0 or 4.5 m/s, so that means

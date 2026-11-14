@@ -182,3 +182,41 @@ Dashboard (`src/dashboard.py`), 2026-11-14, on top of `ec107b8`, no analytical s
   Synthetic data with empty RFI/advisory lists: `io.load` raises `KeyError: 'ts'`, shown as an error.
 - Network: all 148 page resources came from `localhost:8501`; usage telemetry disabled in `.streamlit/config.toml`.
 - `python -m pytest -q tests`: 15 passed.
+
+## Dashboard redesign: FIELD SIGNAL (worklog)
+
+2026-11-14, on top of `e2f1cf0`. Display only: no change to `src/straightrows`, thresholds, confidence,
+submission output, data or dependencies.
+
+**Design.** Light "field instrument" theme set entirely in `.streamlit/config.toml` (ivory `#f5f1e6`,
+charcoal `#23221e`, green accent `#2e6b4e`, fine `#cfc7b4` rules, serif headings, monospace code/timestamps);
+no CSS selectors. Header: FIELD SIGNAL / Straight Rows · Fleet Guidance Investigation, with a status line
+(in-sample for development, not measured for evaluation). Data folder and aggregation moved to
+*Advanced settings*. A fleet incident ribbon (click or selector) replaces the opening table, which moved to
+*Detection register*. One incident at a time: heading, interval, action; evidence charts left, decision brief
+right; methodology and provenance on their own tab.
+
+**Display-only mapping.** Up to three primary channels per attributed cause (see README). Equipment fault uses
+the same link/dropout test as `evidence.py` to choose link channels or min C/N0 channels.
+
+**Contrast** (WCAG ratios on `#f5f1e6`): body text 14.1, secondary text 6.4, green accent 5.6; tractor lines
+T1 3.9, T2 3.65, T3 3.86 (T2/T3 darkened from the reference palette); white codes on cause bars 5.4–5.8;
+working bar 4.8; parked bar 1.98 (intentionally faint; also shown by thickness and tooltip).
+
+**Checks run.**
+- Browser at 1366×768: heading at y≈566 (first screen), decision brief and charts after one short scroll;
+  evidence chart 487 px in a 506 px column, no horizontal scroll. At 1920×1080 the heading (694), brief (881)
+  and first chart (919) are all in the first screen. Ribbon click selected #3; the selector then selected #2
+  without the earlier click overriding it; tooltip legible (ivory background, charcoal text) and correct.
+- `streamlit.testing.AppTest` (headless): all 7 evaluation incidents and the development T2 fault/spoof and T1
+  link fault render with heading, action and interpretation; chart sets match the mapping (dropout fault →
+  min C/N0/satellites/mean C/N0; link fault → link/RTK_FIXED/min C/N0). Switching window resets the selection
+  to #1. Custom interval, missing data folder, no detections and no labels file show their messages without
+  exceptions.
+- Evaluation output from the pipeline equals `outputs/submission.json`; `src/straightrows` etc. unchanged vs
+  `e2f1cf0`; data hashes unchanged; `python -m pytest -q tests`: 15 passed; no server errors.
+
+**Not checked.** Screen readers; touch devices; browser zoom levels other than 100 %; colour-vision simulation of
+the full page (T1 blue and T3 green have similar lightness, 1.13:1; they are told apart by hue, legend and
+tooltip). Some screenshots could not be taken while the app window was hidden; those checks used DOM
+measurements and AppTest instead.
