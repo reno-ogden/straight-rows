@@ -97,6 +97,37 @@ working tractors). This was counted after the change, not used to choose it.
 Caveat: parameters were chosen and scored on the same 12 episodes (no held-out split), so this is
 an in-sample comparison. The flat 120–360 s plateau is the main argument that it generalises.
 
+## Evidence accuracy review — 2026-11-14
+
+Evidence text only (`evidence.py`, plus two dashboard methodology/caption sentences); detection boundaries,
+causes, actions, tractor sets and confidence are unchanged (verified on the regenerated evaluation output).
+Corrections:
+
+- Interval and RFI times now carry the date and `Z` (e.g. `2026-05-06 01:00-02:00Z`); concurrency spans too.
+- "Unaffected T2,T3" → "not in this detection": tractors outside a detection can still be degraded below the
+  rule threshold (evaluation #5: T2 mean C/N0 39.3 vs 45.0 prior).
+- Cross-track error is named as the guidance-monitor channel, not derived from reported position.
+- S4/Kp/Dst line states that SDA timestamp meaning (interval start or end) is undocumented.
+- Jamming: "so scintillation does not explain the signal loss" → regional scintillation was low, so the rule
+  does not attribute the loss to space weather; the rule does not use RFI reports.
+- RFI: "at" → "timestamped", distance is from the tractors' mean *reported* position, observation-vs-report
+  time is undocumented, rules do not use RFI. "No RFI report…" now adds that absence of a report does not show
+  that no interference occurred.
+- New line per detection: minutes in which the cause's per-minute rule (`attribution.tests`) held on each
+  listed tractor, with the bridging (≤ 180 s) and cross-tractor merge (≤ 300 s) notes when they apply. This
+  exposes, for example, that the evaluation T2 equipment fault held its rule in 19 of 40 minutes and the
+  18:30 jamming detection on T1 in 24 of 30.
+- Dashboard methodology and scoring caption: analysis is retrospective; onset credit is not real-time latency.
+
+Checked and left as is: equipment-fault evidence names the observed symptom (antenna dropouts vs link loss)
+with the same test the dashboard uses; confidence is described as fixed/uncalibrated wherever shown;
+development metrics are labelled in-sample; reported position is never called ground truth; dashboard
+rule-minute counts equal the exported counts for all 16 detections (both windows).
+
+Known limitation (not changed, detector-adjacent): the equipment-fault evidence names the link when the
+affected tractor's link-up share is *any* amount below the others', so a marginal difference could be named
+alongside a dropout. Current outputs are not affected.
+
 ## Suspected multipath (opt-in, `Config.detect_multipath`, default off) — 2026-11-14
 
 Decision: kept as an opt-in analysis option; the submission uses the default pipeline (multipath off).

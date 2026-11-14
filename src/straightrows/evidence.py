@@ -7,12 +7,34 @@ import math
 
 import pandas as pd
 
+from .attribution import tests
+from .candidates import flag
+from .features import minute_features
+
 TRACTORS = ["T1", "T2", "T3"]
 PRE = pd.Timedelta(minutes=30)
 
 
 def _z(ts):
     return ts.strftime("%H:%MZ")
+
+
+def _dz(ts):
+    """Date and UTC time, e.g. 2026-05-06 01:00Z."""
+    return ts.strftime("%Y-%m-%d %H:%MZ")
+
+
+def _span(a, b):
+    """'2026-05-06 01:00-02:00Z', with the end date repeated only if it differs."""
+    last = b - pd.Timedelta(seconds=1)
+    return f"{a:%Y-%m-%d %H:%M}-{b:%H:%M}Z" if a.date() == last.date() else f"{_dz(a)} to {_dz(b)}"
+
+
+def _rule_minutes(d, cfg, cause, a, b, aff):
+    """Per affected tractor: minutes in [a, b) where the pipeline's own per-minute rule for `cause` is true."""
+    f = flag(minute_features(d, (a, b)), cfg)
+    hit = tests(f, cfg)[cause]
+    return {t: (int((hit & (f.tractor_id == t)).sum()), int((f.tractor_id == t).sum())) for t in aff}
 
 
 def _km(lat1, lon1, lat2, lon2):
@@ -38,7 +60,7 @@ def describe(det, d, cfg, others):
     tele, a, b = d["tele"], det["start"], det["end"]
     aff = det["tractors"]
     un = [t for t in TRACTORS if t not in aff]
-    span = f"{_z(a)}-{_z(b)}"
+    span = _span(a, b)
     during = tele[(tele.ts >= a) & (tele.ts < b)]
     sa = _stats(during[during.tractor_id.isin(aff)])
     su = _stats(during[during.tractor_id.isin(un)])
@@ -51,15 +73,16 @@ def describe(det, d, cfg, others):
     s = f"{who} {span}: mean C/N0 {sa['cn0']:.1f} dB-Hz"
     s += f" (vs {sp['cn0']:.1f} in prior 30 min working)" if sp else " (no working samples in prior 30 min)"
     if su:
-        s += f"; unaffected {','.join(un)} {su['cn0']:.1f}"
+        s += f"; not in this detection {','.join(un)} {su['cn0']:.1f}"
     s += f"; min C/N0 {sa['mincn0']:.1f}; median satellites {sa['sats']:.0f}."
     ev.append(s)
 
     # 2. Guidance + fix + correction link.
-    s = (f"Cross-track error median {sa['xte_med']:.2f} m, max {sa['xte_max']:.2f} m"
-         + (f" (unaffected median {su['xte_med']:.2f} m)" if su else "")
+    s = (f"Guidance-monitor cross-track error (separate channel, not derived from reported position) "
+         f"median {sa['xte_med']:.2f} m, max {sa['xte_max']:.2f} m"
+         + (f" (not in this detection: median {su['xte_med']:.2f} m)" if su else "")
          + f"; RTK_FIXED {sa['fixed']:.0f}%, NO_FIX {sa['nofix']:.0f}%; RTK link up {sa['link']:.0f}%"
-         + (f" (unaffected {su['link']:.0f}%)." if su else "."))
+         + (f" (not in this detection: {su['link']:.0f}%)." if su else "."))
     ev.append(s)
 
     # 3. Space context: S4 in force during the interval, Kp, Dst.
@@ -69,7 +92,8 @@ def describe(det, d, cfg, others):
     dst = d["dst"][(d["dst"].ts > a - pd.Timedelta(hours=1)) & (d["dst"].ts < b)].dst_nT
     rel = "at/above" if s4w.min() >= cfg.s4_storm else ("below" if s4w.max() < cfg.s4_storm else "crossing")
     ev.append(f"Regional S4 {s4w.min():.3f}-{s4w.max():.3f} ({rel} the {cfg.s4_storm} scintillation level); "
-              f"Kp {', '.join(f'{v:g}' for v in kp)}; Dst min {dst.min():.0f} nT.")
+              f"Kp {', '.join(f'{v:g}' for v in kp)}; Dst min {dst.min():.0f} nT "
+              f"(SDA timestamps' meaning, interval start or end, is not documented).")
 
     # 4. Why this cause (the rule that fired, with its numbers).
     s4txt = f"S4 {s4w.min():.3f}-{s4w.max():.3f}"
@@ -79,7 +103,8 @@ def describe(det, d, cfg, others):
                   f"fault does not.")
     elif cause == "JAMMING":
         ev.append(f"Attributed JAMMING: per-minute rule = C/N0 below {cfg.cn0_low_dbhz:g} dB-Hz with S4 below "
-                  f"{cfg.s4_storm} (here {s4txt}), so scintillation does not explain the signal loss.")
+                  f"{cfg.s4_storm} (here {s4txt}); regional scintillation was low, so the rule does not attribute "
+                  f"the loss to space weather. The rule does not use RFI reports.")
     elif cause == "SPOOFING":
         ev.append(f"Attributed SPOOFING: guidance error above {cfg.xte_high_m:g} m on {who} with mean C/N0 "
                   f"{sa['cn0']:.1f} dB-Hz (no signal-health collapse)"
@@ -95,20 +120,34 @@ def describe(det, d, cfg, others):
         ev.append(f"Attributed EQUIPMENT_FAULT (machine-specific): {'; '.join(parts) or 'link/dropout rule'}; "
                   f"recommend servicing {who} while other machines continue.")
 
+    # 4b. Membership: how long the per-minute rule held on each listed tractor (explains merged/bridged sets).
+    rm = _rule_minutes(d, cfg, cause, a, b, aff)
+    s = (f"Per-minute {cause} rule true on " + ", ".join(f"{t} {k}/{n} min" for t, (k, n) in rm.items()) + ".")
+    if any(k < n for k, n in rm.values()):
+        s += f" Same-tractor gaps of at most {cfg.bridge_gap_s:g} s are bridged, so the interval includes such minutes."
+    if len(aff) > 1:
+        s += (f" Same-cause runs on different tractors starting within {cfg.merge_gap_s:g} s of a previous end are "
+              f"merged into one detection, so a listed tractor need not be affected for the whole interval.")
+    ev.append(s)
+
     # 5. RFI reports: one timestamp per report; README: 10-30 min delays. Search onset-10 to end+30 min.
     rfi = d["rfi"][(d["rfi"].ts >= a - pd.Timedelta(minutes=10)) & (d["rfi"].ts <= b + pd.Timedelta(minutes=30))]
+    lo, hi = a - pd.Timedelta(minutes=10), b + pd.Timedelta(minutes=30)
     if len(rfi):
         pos = during[during.tractor_id.isin(aff)][["lat", "lon"]].mean()
         ev.append("RFI: " + "; ".join(
-            f"{r.id} at {r.ts:%H:%M}Z ({(r.ts - a).total_seconds() / 60:+.0f} min from onset), confidence "
-            f"{r.confidence}, centre {_km(r.centerLat, r.centerLon, pos.lat, pos.lon):.1f} km from {who} "
-            f"(ellipse {r.semiMajor_km}x{r.semiMinor_km} km)" for r in rfi.itertuples()) + ".")
+            f"{r.id} timestamped {_dz(r.ts)} ({(r.ts - a).total_seconds() / 60:+.0f} min from onset), confidence "
+            f"{r.confidence}, centre {_km(r.centerLat, r.centerLon, pos.lat, pos.lon):.1f} km from the mean reported "
+            f"position of {who} (ellipse {r.semiMajor_km}x{r.semiMinor_km} km)" for r in rfi.itertuples())
+            + ". Whether an RFI timestamp is observation or report time is not documented; the attribution rules "
+              "do not use RFI reports.")
     else:
-        ev.append(f"No RFI report between {_z(a - pd.Timedelta(minutes=10))} and {_z(b + pd.Timedelta(minutes=30))}.")
+        ev.append(f"No RFI report timestamped between {_dz(lo)} and {_dz(hi) if hi.date() != lo.date() else _z(hi)}; "
+                  f"absence of a report does not show that no interference occurred.")
 
     # 6. Concurrent detections: distinct causes kept separate; note shared operational event.
     if others:
         ev.append("Concurrent with " + "; ".join(
-            f"{o['cause']} on {','.join(o['tractors'])} {_z(o['start'])}-{_z(o['end'])}" for o in others)
+            f"{o['cause']} on {','.join(o['tractors'])} {_span(o['start'], o['end'])}" for o in others)
             + " - reported as a separate cause in the same operational period.")
     return ev

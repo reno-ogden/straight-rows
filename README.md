@@ -182,8 +182,10 @@ The charts show the inputs behind each detection. They do not independently vali
    separate 1 Hz path: short min-C/N0 dips (≥ 6 dB below a 121 s running median for 8–60 s, mean C/N0 within
    2 dB of its own median, tractor working) become one detection per tractor per dip, outside minute assembly.
 6. **Evidence** (`evidence.py`): strings computed from the 1 Hz telemetry and SDA feeds over each
-   detection (affected vs. own prior 30 min vs. other tractors, S4/Kp/Dst, nearby RFI reports,
-   concurrent detections).
+   detection (affected vs. own prior 30 min vs. other tractors, S4/Kp/Dst, how many minutes the cause's
+   per-minute rule held on each listed tractor and how bridging/merging shaped the interval, nearby RFI
+   reports, concurrent detections). Times carry the date and UTC; RFI and SDA timestamp meanings are stated as
+   undocumented; "no RFI report" is not presented as proof that no interference occurred.
 7. **Export** (`export.py`): `submission.json` in the official template's shape.
 
 Inputs and how they are treated:
@@ -201,7 +203,9 @@ Inputs and how they are treated:
 Scored with the organizers' published scorer (`tools/score_submission.py`, code unchanged) against the
 **12 labeled development episodes** (May 4–5, simulated). The parameters were chosen on these same
 episodes, so these are **in-sample** numbers. They are **not** evaluation-window performance: the
-evaluation labels are not public, and the organizers score once after the lock.
+evaluation labels are not public, and the organizers score once after the lock. The analysis is
+retrospective (intervals are assembled after the whole window is available); onset credit measures how close a
+detection's start is to the labeled start, not real-time alerting latency.
 
 | Variant | Diagnostic /40 | Macro-F1 | Onset credit | Episodes correct | False positives |
 |---|---:|---:|---:|---:|---:|

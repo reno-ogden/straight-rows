@@ -27,6 +27,28 @@
    (copy of `outputs/submission.json`); open one PR to `main` before 22:00 UTC; confirm the Submission check is green.
 3. Any push to the PR after 22:00 UTC makes it late.
 
+## Evidence accuracy review (2026-11-14 ~16:10 UTC; committed locally, not pushed)
+
+Evidence wording only; detector behaviour unchanged. Changed: `src/straightrows/evidence.py`, `src/dashboard.py`
+(one methodology bullet + scoring caption), `README.md`, `docs/pipeline.md` ("Evidence accuracy review" lists
+every correction), this file.
+
+- Regenerated to `outputs/evidence-review-20261114T160749Z/submission.json`: official + repo validator OK;
+  start, end, tractors, class, action, confidence identical for all 7 detections vs the reference; only
+  `evidence` strings differ (dated times, "not in this detection", guidance-monitor wording, SDA/RFI timestamp
+  caveats, reported-position wording, softened jamming sentence, absence-of-RFI caveat, new per-tractor
+  rule-minute/bridging/merge line).
+- Checks: `pytest -q tests` 33 passed; dashboard headless suites pass (they now report "differs from
+  `outputs/submission.json`" only because that file holds the old wording); dashboard rule-minute counts = exported
+  counts for 16/16 detections; multipath option still leaves non-multipath entries identical (dev and eval).
+- **Submission file replaced (user approved, 2026-11-14 ~16:15 UTC).** Old file backed up to
+  `outputs/submission.before-evidence-wording-20261114T161516Z.json` (SHA-256 `5e62e998…e06cc`, = the earlier
+  references). `outputs/submission.json` is now the corrected wording (SHA-256 `27ed40c5…60ccb6`): official and
+  repo validator OK; offline official PR-check logic: no privacy findings, only "repository not public yet" while
+  private; same 7 detections (boundaries, tractors, class, action, confidence identical); current code regenerates
+  it byte-identically (`outputs/replace-check-20261114T161530Z/`). **This is the file to submit**, and the new
+  reference for future comparisons.
+
 ## Suspected multipath — opt-in detector (2026-11-14 ~16:00 UTC; committed locally, not pushed)
 
 **Decision (user, 2026-11-14): keep as opt-in, default off.** The submission keeps the default pipeline

@@ -917,6 +917,9 @@ def methodology_md():
   a probability.
 - **Development results are in-sample:** parameters were chosen on the same 12 labeled episodes. The evaluation
   window has no public labels; its accuracy is unknown.
+- **Analysis is retrospective:** each detection is assembled after the whole window is available (minute runs,
+  gap bridging, merging). Onset credit compares a detection's start with the labeled start; it is not real-time
+  alerting latency.
 - **SDA and RFI timestamp meanings are not documented** (interval start or end; RFI observation or report time).
   The pipeline uses the latest value at or before each minute. RFI reports are cited as evidence only.
 - **Known gaps:** jamming or spoofing during a storm is missed; elevated Kp alone does not prove space weather.
@@ -1019,7 +1022,8 @@ def render_fleet():
                                                          "e": len(res["false_positives"])}, 0)},
                                   [("Diagnostic score (of 40)", "a", 2), ("Macro-F1", "b", 3),
                                    ("Onset credit", "c", 3), ("False positives", "e", 0)]))
-                    st.caption("In-sample: parameters were chosen on these same labels. Not evaluation performance.")
+                    st.caption("In-sample: parameters were chosen on these same labels. Not evaluation performance. "
+                               "Onset credit is retrospective start-time agreement, not real-time alerting latency.")
     with st.expander("About this analysis — methodology, display definitions, provenance"):
         t1, t2, t3 = st.tabs(["Methodology and limitations", "Display definitions", "Provenance"])
         t1.markdown(methodology_md())
